@@ -44,6 +44,8 @@ export interface CheckoutInput {
   deliverySlotEnd?: Date | null;
   deliveryNotes?: string | null;
   couponCode?: string | null;
+  /** Driver tip in AED (100% to driver). */
+  tipAmount?: number | null;
   /** Amount of wallet balance to apply toward the order total (AED). */
   walletAmount?: number | null;
   /** Whole loyalty points to redeem (100 pts = 1 AED). */
@@ -124,10 +126,12 @@ export async function checkoutCart(input: CheckoutInput) {
     deliveryType: input.deliveryType,
   });
   const shipping = deliveryQuote.fee;
+  const tipAmount = Math.round(Math.max(0, Number(input.tipAmount || 0)) * 100) / 100;
   const taxable = Math.max(0, subtotal - discount + shipping);
   const taxInfo = await calculateTax(taxable);
   const company = await getCompanyVatRate();
-  const grossTotal = Math.round((taxable + taxInfo.taxAmount) * 100) / 100;
+  const grossTotal =
+    Math.round((taxable + taxInfo.taxAmount + tipAmount) * 100) / 100;
 
   let walletApplied = Math.min(Math.max(0, Number(input.walletAmount || 0)), grossTotal);
   walletApplied = Math.round(walletApplied * 100) / 100;
@@ -183,6 +187,7 @@ export async function checkoutCart(input: CheckoutInput) {
         subtotal,
         discount: discount + walletApplied + loyaltyApplied,
         shipping,
+        tipAmount,
         tax: taxInfo.taxAmount,
         total,
         currency: process.env.CURRENCY || 'AED',

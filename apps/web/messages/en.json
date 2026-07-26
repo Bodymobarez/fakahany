@@ -69,11 +69,17 @@
     "forgot": "Forgot password?"
   },
   "cart": {
-    "title": "Your cart",
-    "empty": "Your cart is empty.",
-    "continueShopping": "Continue shopping",
+    "title": "Your Basket",
+    "subtitle": "Review your items and proceed to checkout.",
+    "empty": "Your basket is empty.",
+    "continueShopping": "Continue Shopping",
     "subtotal": "Subtotal",
-    "checkout": "Checkout",
+    "vat": "VAT (5%)",
+    "orderSummary": "Order Summary",
+    "checkout": "Proceed to Checkout",
+    "save": "Save",
+    "saveForLater": "Save for later",
+    "clearBasket": "Clear Basket",
     "remove": "Remove",
     "quantity": "Qty"
   },

@@ -241,6 +241,20 @@ cartRouter.delete('/items/:itemId', optionalAuth, async (req, res, next) => {
   }
 });
 
+/** Clear all items (and coupon) from the current cart. */
+cartRouter.delete('/', optionalAuth, async (req, res, next) => {
+  try {
+    const sessionId = (req.headers['x-session-id'] as string) || undefined;
+    const cart = await getOrCreateCart(req.user?.sub, sessionId);
+    await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+    await prisma.cart.update({ where: { id: cart.id }, data: { couponId: null } });
+    const refreshed = await getOrCreateCart(req.user?.sub, sessionId);
+    res.json({ cart: await summarizeCart(refreshed) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const couponSchema = z.object({ code: z.string().min(1) });
 
 cartRouter.post('/coupon', authenticate, validate(couponSchema), async (req, res, next) => {

@@ -1,9 +1,20 @@
 import { api, type ApiCart } from './api';
 import { getSessionId } from './session';
 
-export async function fetchCart(): Promise<ApiCart> {
+export async function fetchCart(opts?: {
+  addressId?: string;
+  emirate?: string;
+  lat?: number;
+  lng?: number;
+}): Promise<ApiCart> {
   const { data } = await api.get<{ cart: ApiCart }>('/api/cart', {
     headers: { 'X-Session-Id': getSessionId() },
+    params: {
+      addressId: opts?.addressId,
+      emirate: opts?.emirate,
+      lat: opts?.lat,
+      lng: opts?.lng,
+    },
   });
   return data.cart;
 }
@@ -56,5 +67,12 @@ export async function applyCouponApi(code: string): Promise<ApiCart> {
 
 export async function removeCouponApi(): Promise<ApiCart> {
   const { data } = await api.delete<{ cart: ApiCart }>('/api/cart/coupon');
+  return data.cart;
+}
+
+export async function clearCartApi(): Promise<ApiCart> {
+  const { data } = await api.delete<{ cart: ApiCart }>('/api/cart', {
+    headers: { 'X-Session-Id': getSessionId() },
+  });
   return data.cart;
 }

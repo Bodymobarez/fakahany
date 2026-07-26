@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" fill="none" role="img" aria-label="Credit card">
+  <defs>
+    <linearGradient id="cc" x1="0" y1="0" x2="96" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B4D3E"/>
+      <stop offset="1" stop-color="#2F6F5E"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="4" width="92" height="56" rx="8" fill="url(#cc)"/>
+  <rect x="2" y="18" width="92" height="12" fill="#0F2F26" opacity="0.55"/>
+  <rect x="10" y="38" width="22" height="10" rx="2" fill="#D4AF37"/>
+  <rect x="38" y="40" width="40" height="3" rx="1.5" fill="#E8F5E9" opacity="0.85"/>
+  <rect x="38" y="46" width="28" height="3" rx="1.5" fill="#E8F5E9" opacity="0.55"/>
+  <circle cx="78" cy="44" r="6" fill="#F4C430" opacity="0.9"/>
+  <circle cx="86" cy="44" r="6" fill="#E07A5F" opacity="0.85"/>
+</svg>

@@ -167,8 +167,8 @@ export default function ZonesPage() {
   return (
     <div>
       <PageHeader
-        title="Zones"
-        description="Delivery coverage, fees, and GeoJSON polygons (edit or delete any zone)."
+        title="Delivery zones & charges"
+        description="Set coverage polygons and the delivery fee (baseFee) per zone. Optional freeAbove waives the fee above that order subtotal. Also available under Settings → Delivery charges."
       />
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

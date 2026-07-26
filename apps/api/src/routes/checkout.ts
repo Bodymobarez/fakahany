@@ -16,6 +16,7 @@ const checkoutSchema = z.object({
   deliverySlotEnd: z.coerce.date().optional().nullable(),
   deliveryNotes: z.string().max(500).optional().nullable(),
   couponCode: z.string().optional().nullable(),
+  tipAmount: z.number().nonnegative().max(500).optional().nullable(),
   walletAmount: z.number().nonnegative().optional().nullable(),
   /** Whole reward points to redeem (100 pts = 1 AED). */
   pointsToRedeem: z.number().int().nonnegative().optional().nullable(),

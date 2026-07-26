@@ -1,20 +1,20 @@
 'use client';
 
 import Image from 'next/image';
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
 import { Price } from '@fv/ui';
 import { useTranslations } from 'next-intl';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from '@/i18n/routing';
 import {
-  applyCouponApi,
+  clearCartApi,
   removeCartItemApi,
-  removeCouponApi,
   updateCartItemApi,
 } from '@/lib/cartApi';
+import { addToWishlist } from '@/lib/wishlistApi';
 import { selectIsAuthenticated } from '@/store/authSlice';
 import {
-  selectCartCoupon,
+  clearCart,
   selectCartItems,
   selectCartSubtotal,
   selectCartTotals,
@@ -26,75 +26,96 @@ export default function CartPage() {
   const items = useSelector(selectCartItems);
   const subtotal = useSelector(selectCartSubtotal);
   const totals = useSelector(selectCartTotals);
-  const coupon = useSelector(selectCartCoupon);
   const isAuth = useSelector(selectIsAuthenticated);
   const dispatch = useDispatch();
-  const [code, setCode] = useState('');
-  const [couponError, setCouponError] = useState<string | null>(null);
-  const [couponBusy, setCouponBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function changeQty(itemId: string | undefined, quantity: number) {
-    if (!itemId) return;
+    if (!itemId || quantity < 1) return;
+    setBusyId(itemId);
     try {
       const cart = await updateCartItemApi(itemId, quantity);
       dispatch(setCartFromApi(cart));
     } catch {
-      /* ignore */
+      setError('Could not update quantity');
+    } finally {
+      setBusyId(null);
     }
   }
 
   async function remove(itemId: string | undefined) {
     if (!itemId) return;
+    setBusyId(itemId);
     try {
       const cart = await removeCartItemApi(itemId);
       dispatch(setCartFromApi(cart));
     } catch {
-      /* ignore */
+      setError('Could not remove item');
+    } finally {
+      setBusyId(null);
     }
   }
 
-  async function onApplyCoupon(e: FormEvent) {
-    e.preventDefault();
+  async function saveItem(itemId: string | undefined, productId: string) {
+    if (!itemId) return;
     if (!isAuth) {
-      setCouponError('Sign in to apply a coupon');
+      setError('Sign in to save items for later');
       return;
     }
-    setCouponBusy(true);
-    setCouponError(null);
+    setBusyId(itemId);
+    setError(null);
     try {
-      const cart = await applyCouponApi(code.trim());
+      await addToWishlist(productId);
+      const cart = await removeCartItemApi(itemId);
       dispatch(setCartFromApi(cart));
-      setCode('');
-    } catch (err: unknown) {
-      setCouponError(
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message || 'Invalid coupon',
-      );
+    } catch {
+      setError('Could not save item for later');
     } finally {
-      setCouponBusy(false);
+      setBusyId(null);
     }
   }
 
-  async function onRemoveCoupon() {
-    setCouponBusy(true);
-    setCouponError(null);
+  async function saveBasketForLater() {
+    if (!isAuth) {
+      setError('Sign in to save your basket for later');
+      return;
+    }
+    setError(null);
     try {
-      const cart = await removeCouponApi();
+      for (const item of items) {
+        await addToWishlist(item.productId);
+      }
+      const cart = await clearCartApi();
       dispatch(setCartFromApi(cart));
     } catch {
-      setCouponError('Could not remove coupon');
-    } finally {
-      setCouponBusy(false);
+      setError('Could not save basket for later');
     }
   }
+
+  async function onClearBasket() {
+    setError(null);
+    try {
+      const cart = await clearCartApi();
+      dispatch(setCartFromApi(cart));
+      dispatch(clearCart());
+    } catch {
+      setError('Could not clear basket');
+    }
+  }
+
+  // Basket summary excludes delivery (quoted at checkout by zone).
+  const goodsNet = Math.max(0, subtotal - totals.discountAmount);
+  const basketVat = Math.round(goodsNet * 0.05 * 100) / 100;
+  const basketTotal = Math.round((goodsNet + basketVat) * 100) / 100;
 
   if (items.length === 0) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="font-display text-3xl font-semibold text-leaf-900">
+        <h1 className="font-display text-3xl font-semibold text-heading md:text-4xl">
           {t('title')}
         </h1>
-        <p className="mt-3 text-ink/65">{t('empty')}</p>
+        <p className="mt-3 text-muted">{t('empty')}</p>
         <Link
           href="/products"
           className="mt-8 inline-flex rounded-full bg-leaf-700 px-6 py-3 text-sm font-semibold text-white hover:bg-leaf-600"
@@ -106,151 +127,190 @@ export default function CartPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 md:px-6">
-      <h1 className="font-display text-3xl font-semibold text-leaf-900">
-        {t('title')}
-      </h1>
+    <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+      <header className="mb-8">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-heading md:text-4xl">
+          {t('title')}
+        </h1>
+        <p className="mt-2 text-sm text-muted md:text-base">{t('subtitle')}</p>
+      </header>
 
-      <ul className="mt-8 divide-y divide-leaf-200 border-y border-leaf-200">
-        {items.map((item) => (
-          <li key={item.id || item.productId} className="flex gap-4 py-5">
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-leaf-100">
-              {item.imageUrl && (
-                <Image
-                  src={item.imageUrl}
-                  alt={item.name}
-                  fill
-                  className="object-cover"
-                  sizes="80px"
-                />
-              )}
-            </div>
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-medium text-ink">{item.name}</p>
-                <div className="mt-1">
-                  <Price
-                    amount={item.unitPrice}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-leaf-800"
-                    symbolClassName="inline-block h-3.5 w-3.5"
-                  />
+      {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.9fr)]">
+        <div className="space-y-4">
+          {items.map((item) => {
+            const lineTotal = item.unitPrice * item.quantity;
+            const disabled = busyId === item.id;
+            return (
+              <article
+                key={item.id || item.productId}
+                className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-4 sm:flex-row sm:items-center"
+              >
+                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-surface-2 sm:h-28 sm:w-28">
+                  {item.imageUrl ? (
+                    <Image
+                      src={item.imageUrl}
+                      alt={item.name}
+                      fill
+                      className="object-cover"
+                      sizes="112px"
+                    />
+                  ) : null}
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-sm text-ink/70">
-                  {t('quantity')}
-                  <input
-                    type="number"
-                    min={1}
-                    value={item.quantity}
-                    onChange={(e) =>
-                      void changeQty(item.id, Number(e.target.value))
-                    }
-                    className="w-16 rounded-lg border border-leaf-300 px-2 py-1 text-center"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void remove(item.id)}
-                  className="text-sm text-ink/50 hover:text-red-600"
-                >
-                  {t('remove')}
-                </button>
-              </div>
+
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-display text-lg font-semibold text-heading">
+                    {item.name}
+                  </h2>
+                  <div className="mt-1">
+                    <Price
+                      amount={item.unitPrice}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-leaf-700"
+                      symbolClassName="inline-block h-3.5 w-3.5"
+                    />
+                    <span className="text-sm text-muted"> / unit</span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-4">
+                    <div className="inline-flex items-center rounded-full border border-line bg-surface-2">
+                      <button
+                        type="button"
+                        disabled={disabled || item.quantity <= 1}
+                        onClick={() => void changeQty(item.id, item.quantity - 1)}
+                        className="px-3 py-1.5 text-lg leading-none text-heading disabled:opacity-40"
+                        aria-label="Decrease quantity"
+                      >
+                        −
+                      </button>
+                      <span className="min-w-[2.5rem] text-center text-sm font-semibold text-ink">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => void changeQty(item.id, item.quantity + 1)}
+                        className="px-3 py-1.5 text-lg leading-none text-heading disabled:opacity-40"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <Price
+                      amount={lineTotal}
+                      className="inline-flex items-center gap-1 text-lg font-semibold text-heading"
+                      symbolClassName="inline-block h-4 w-4"
+                    />
+                  </div>
+
+                  <div className="mt-3 flex gap-4 text-sm">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => void saveItem(item.id, item.productId)}
+                      className="inline-flex items-center gap-1.5 font-medium text-leaf-700 hover:underline disabled:opacity-50"
+                    >
+                      <HeartIcon />
+                      {t('save')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => void remove(item.id)}
+                      className="font-medium text-red-600 hover:underline disabled:opacity-50"
+                    >
+                      {t('remove')}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+
+          <Link
+            href="/products"
+            className="flex w-full items-center justify-center rounded-full border-2 border-leaf-700 px-6 py-3 text-sm font-semibold text-leaf-800 transition hover:bg-leaf-50"
+          >
+            {t('continueShopping')}
+          </Link>
+        </div>
+
+        <aside className="h-fit rounded-2xl border border-line bg-surface p-5 md:sticky md:top-24">
+          <h2 className="font-display text-xl font-semibold text-heading">
+            {t('orderSummary')}
+          </h2>
+          <div className="mt-5 space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted">{t('subtotal')}</span>
+              <Price
+                amount={subtotal}
+                className="inline-flex items-center gap-1 font-medium"
+                symbolClassName="inline-block h-3.5 w-3.5"
+              />
             </div>
-          </li>
-        ))}
-      </ul>
+            {totals.discountAmount > 0 ? (
+              <div className="flex justify-between text-leaf-700">
+                <span>Discount</span>
+                <Price
+                  amount={totals.discountAmount}
+                  className="inline-flex items-center gap-1 font-medium"
+                  symbolClassName="inline-block h-3.5 w-3.5"
+                />
+              </div>
+            ) : null}
+            <div className="flex justify-between rounded-lg bg-citrus-50 px-3 py-2">
+              <span className="text-muted">{t('vat')}</span>
+              <Price
+                amount={basketVat}
+                className="inline-flex items-center gap-1 font-medium"
+                symbolClassName="inline-block h-3.5 w-3.5"
+              />
+            </div>
+            <div className="flex justify-between border-t border-line pt-3 text-base">
+              <span className="font-semibold text-heading">Total</span>
+              <Price
+                amount={basketTotal}
+                className="inline-flex items-center gap-1.5 text-lg font-semibold text-leaf-800"
+                symbolClassName="inline-block h-4 w-4"
+              />
+            </div>
+          </div>
 
-      <div className="mt-8 rounded-2xl border border-leaf-200 bg-white/70 p-4">
-        <p className="text-sm font-medium text-ink">Promo code</p>
-        {coupon ? (
-          <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-            <span className="font-semibold text-leaf-800">
-              {coupon.code} applied
-              {coupon.type === 'PERCENT' ? ` (−${coupon.value}%)` : ''}
-            </span>
-            <button
-              type="button"
-              disabled={couponBusy}
-              onClick={() => void onRemoveCoupon()}
-              className="text-red-600 hover:underline disabled:opacity-60"
-            >
-              Remove
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={(e) => void onApplyCoupon(e)} className="mt-3 flex gap-2">
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="FRESH10"
-              className="min-w-0 flex-1 rounded-xl border border-leaf-300 px-3 py-2 text-sm outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
-            />
-            <button
-              type="submit"
-              disabled={couponBusy || !code.trim()}
-              className="rounded-full bg-leaf-700 px-4 py-2 text-sm font-semibold text-white hover:bg-leaf-600 disabled:opacity-60"
-            >
-              Apply
-            </button>
-          </form>
-        )}
-        {couponError && <p className="mt-2 text-sm text-red-600">{couponError}</p>}
-        {!isAuth && (
-          <p className="mt-2 text-xs text-ink/50">
-            <Link href="/auth/login" className="text-leaf-700 underline">
-              Sign in
-            </Link>{' '}
-            to apply coupons.
-          </p>
-        )}
-      </div>
-
-      <div className="mt-8 flex flex-col items-end gap-2 text-sm">
-        <div className="flex items-center gap-3">
-          <span className="text-ink/70">{t('subtotal')}</span>
-          <Price
-            amount={subtotal}
-            className="inline-flex items-center gap-1.5 font-semibold text-leaf-800"
-            symbolClassName="inline-block h-4 w-4"
-          />
-        </div>
-        {totals.discountAmount > 0 && (
-          <div className="flex items-center gap-3 text-leaf-700">
-            <span>Discount</span>
-            <Price
-              amount={totals.discountAmount}
-              className="inline-flex items-center gap-1"
-              symbolClassName="inline-block h-3.5 w-3.5"
-            />
-          </div>
-        )}
-        {totals.vatAmount > 0 && (
-          <div className="flex items-center gap-3 text-ink/60">
-            <span>VAT</span>
-            <Price
-              amount={totals.vatAmount}
-              className="inline-flex items-center gap-1"
-              symbolClassName="inline-block h-3.5 w-3.5"
-            />
-          </div>
-        )}
-        <div className="flex items-center gap-3 text-lg">
-          <span className="text-ink/70">Total</span>
-          <Price
-            amount={totals.total || subtotal}
-            className="inline-flex items-center gap-1.5 font-semibold text-leaf-800"
-            symbolClassName="inline-block h-4 w-4"
-          />
-        </div>
-        <Link
-          href="/checkout"
-          className="mt-4 inline-flex rounded-full bg-leaf-700 px-8 py-3 text-sm font-semibold text-white hover:bg-leaf-600"
-        >
-          {t('checkout')}
-        </Link>
+          <Link
+            href="/checkout"
+            className="mt-6 flex w-full items-center justify-center rounded-full bg-leaf-700 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-leaf-600"
+          >
+            {t('checkout')}
+          </Link>
+          <button
+            type="button"
+            onClick={() => void saveBasketForLater()}
+            className="mt-3 flex w-full items-center justify-center rounded-full border-2 border-leaf-700 px-6 py-3 text-sm font-semibold text-leaf-800 transition hover:bg-leaf-50"
+          >
+            {t('saveForLater')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onClearBasket()}
+            className="mt-3 w-full py-2 text-sm font-medium text-red-600 hover:underline"
+          >
+            {t('clearBasket')}
+          </button>
+        </aside>
       </div>
     </div>
+  );
+}
+
+function HeartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C4.1 3.75 2 5.765 2 8.25c0 7.22 10 12 10 12s10-4.78 10-12z"
+      />
+    </svg>
   );
 }

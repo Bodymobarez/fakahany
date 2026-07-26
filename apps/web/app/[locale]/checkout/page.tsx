@@ -1,13 +1,24 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Price } from '@fv/ui';
 import { useTranslations } from 'next-intl';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useRouter } from '@/i18n/routing';
 import { api } from '@/lib/api';
-import { fetchCart } from '@/lib/cartApi';
-import { selectIsAuthenticated } from '@/store/authSlice';
+import {
+  applyCouponApi,
+  fetchCart,
+  removeCouponApi,
+} from '@/lib/cartApi';
+import { savePendingCardPayment } from '@/lib/checkoutSession';
+import {
+  availableSlotsForDay,
+  buildDayOptions,
+  formatScheduledLabel,
+  slotRange,
+} from '@/lib/deliverySlots';
+import { selectIsAuthenticated, selectUser } from '@/store/authSlice';
 import {
   clearCart,
   selectCartCoupon,
@@ -22,7 +33,7 @@ import {
   UAE_CENTER,
   type MapLocation,
 } from '@/components/maps/LocationPicker';
-import { StripeCardForm } from '@/components/checkout/StripeCardForm';
+import { CheckoutStepper } from '@/components/checkout/CheckoutStepper';
 import {
   PaymentMethodIcon,
   paymentMethodShortLabel,
@@ -44,7 +55,7 @@ type DeliveryQuote = {
   fee: number;
   etaMinutes: number;
   reason?: string;
-  zone?: { name: string; freeAbove: number | null } | null;
+  zone?: { name: string; freeAbove: number | null; baseFee?: number } | null;
 };
 
 type PayMethod = {
@@ -53,16 +64,32 @@ type PayMethod = {
   stub?: boolean;
 };
 
+const TIP_PRESETS = [0, 5, 10, 15, 20] as const;
+
 export default function CheckoutPage() {
   const tCart = useTranslations('cart');
-  const tCommon = useTranslations('common');
   const items = useSelector(selectCartItems);
   const totals = useSelector(selectCartTotals);
   const cartId = useSelector(selectCartId);
   const coupon = useSelector(selectCartCoupon);
   const isAuth = useSelector(selectIsAuthenticated);
+  const user = useSelector(selectUser);
   const dispatch = useDispatch();
   const router = useRouter();
+
+  const dayOptions = useMemo(() => buildDayOptions(7), []);
+  const [dayKey, setDayKey] = useState(() => {
+    const today = dayOptions[0];
+    if (today && availableSlotsForDay(today.date).length > 0) return today.key;
+    return dayOptions[1]?.key || dayOptions[0]?.key || '';
+  });
+  const [slotId, setSlotId] = useState('');
+  const [tipPreset, setTipPreset] = useState<number | 'other'>(10);
+  const [customTip, setCustomTip] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [addressId, setAddressId] = useState('');
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
@@ -71,24 +98,10 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showNewAddress, setShowNewAddress] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [useWallet, setUseWallet] = useState(false);
-  const [walletInput, setWalletInput] = useState('');
-  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
-  const [pointsPerAed, setPointsPerAed] = useState(100);
-  const [useLoyalty, setUseLoyalty] = useState(false);
-  const [loyaltyInput, setLoyaltyInput] = useState('');
   const [methods, setMethods] = useState<PayMethod[]>([
     { id: 'COD', label: 'Cash on Delivery' },
   ]);
-  const [paymentMethod, setPaymentMethod] = useState('COD');
-  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
-  const [pendingStripe, setPendingStripe] = useState<{
-    paymentId: string;
-    clientSecret: string;
-    orderId: string;
-    orderNumber: string;
-  } | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState('STRIPE');
   const [quote, setQuote] = useState<DeliveryQuote | null>(null);
   const [location, setLocation] = useState<MapLocation>({
     lat: UAE_CENTER.lat,
@@ -100,6 +113,34 @@ export default function CheckoutPage() {
     status: 'idle',
   });
 
+  const tipAmount =
+    tipPreset === 'other'
+      ? Math.max(0, Number(customTip) || 0)
+      : tipPreset;
+
+  const deliveryFee = quote?.covered ? quote.fee : totals.deliveryFee;
+  const goodsNet = Math.max(0, totals.subtotal - totals.discountAmount);
+  const taxable = goodsNet + deliveryFee;
+  const displayVat = Math.round(taxable * 0.05 * 100) / 100;
+  const payableTotal = Math.round((taxable + displayVat + tipAmount) * 100) / 100;
+  const selectedDay = dayOptions.find((d) => d.key === dayKey) || dayOptions[0];
+  const availableSlots = useMemo(() => {
+    const day = dayOptions.find((d) => d.key === dayKey);
+    return day ? availableSlotsForDay(day.date) : [];
+  }, [dayKey, dayOptions]);
+  const selectedSlot = availableSlots.find((s) => s.id === slotId) || availableSlots[0] || null;
+  const selectedAddress = addresses.find((a) => a.id === addressId);
+
+  useEffect(() => {
+    if (!availableSlots.length) {
+      if (slotId) setSlotId('');
+      return;
+    }
+    if (!availableSlots.some((s) => s.id === slotId)) {
+      setSlotId(availableSlots[0].id);
+    }
+  }, [availableSlots, slotId]);
+
   useEffect(() => {
     void fetchCart()
       .then((cart) => dispatch(setCartFromApi(cart)))
@@ -108,35 +149,29 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     void api
-      .get<{ methods: PayMethod[]; publishableKey?: string | null }>('/api/payments/methods')
+      .get<{ methods: PayMethod[] }>('/api/payments/methods')
       .then(({ data }) => {
-        // Partial wallet apply is the checkbox below; primary methods exclude WALLET.
         const fromApi = (data.methods || []).filter((m) => m.id !== 'WALLET');
         const byId = new Map(fromApi.map((m) => [m.id, m]));
-        // Always surface Apple / Google Pay on checkout (demo stubs).
         if (!byId.has('APPLE_PAY')) {
           byId.set('APPLE_PAY', { id: 'APPLE_PAY', label: 'Apple Pay', stub: true });
         }
         if (!byId.has('GOOGLE_PAY')) {
           byId.set('GOOGLE_PAY', { id: 'GOOGLE_PAY', label: 'Google Pay', stub: true });
         }
-        const order = ['COD', 'STRIPE', 'APPLE_PAY', 'GOOGLE_PAY', 'TABBY', 'TAMARA'];
+        const order = ['STRIPE', 'COD', 'APPLE_PAY', 'GOOGLE_PAY', 'TABBY', 'TAMARA'];
         const ordered = [
           ...order.filter((id) => byId.has(id)).map((id) => byId.get(id)!),
           ...[...byId.values()].filter((m) => !order.includes(m.id)),
         ];
         setMethods(ordered.length ? ordered : [{ id: 'COD', label: 'Cash on Delivery' }]);
-        if (ordered[0]) setPaymentMethod(ordered[0].id);
-        const pk =
-          data.publishableKey ||
-          process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
-          null;
-        setStripePublishableKey(pk);
+        if (byId.has('STRIPE')) setPaymentMethod('STRIPE');
+        else if (ordered[0]) setPaymentMethod(ordered[0].id);
       })
       .catch(() => {
         setMethods([
+          { id: 'STRIPE', label: 'Credit/Debit Card' },
           { id: 'COD', label: 'Cash on Delivery' },
-          { id: 'STRIPE', label: 'Card (Stripe)' },
           { id: 'APPLE_PAY', label: 'Apple Pay', stub: true },
           { id: 'GOOGLE_PAY', label: 'Google Pay', stub: true },
         ]);
@@ -154,29 +189,6 @@ export default function CheckoutPage() {
         if (data.addresses.length === 0) setShowNewAddress(true);
       })
       .catch(() => setShowNewAddress(true));
-
-    void api
-      .get<{ wallet: { balance: number | string } }>('/api/wallet/me')
-      .then(({ data }) => {
-        const bal = Number(data.wallet?.balance || 0);
-        setWalletBalance(bal);
-        setWalletInput((prev) => (prev ? prev : bal > 0 ? String(bal) : ''));
-      })
-      .catch(() => undefined);
-
-    void api
-      .get<{
-        account: { points: number };
-        redeem: { pointsPerAed: number; redeemableAed: number };
-      }>('/api/loyalty/me')
-      .then(({ data }) => {
-        setLoyaltyPoints(data.account?.points || 0);
-        setPointsPerAed(data.redeem?.pointsPerAed || 100);
-        setLoyaltyInput((prev) =>
-          prev ? prev : data.redeem?.redeemableAed ? String(data.account.points) : '',
-        );
-      })
-      .catch(() => undefined);
   }, [isAuth]);
 
   useEffect(() => {
@@ -210,38 +222,51 @@ export default function CheckoutPage() {
     totals.discountAmount,
   ]);
 
-  if (pendingStripe) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-10 md:px-6">
-        <h1 className="font-display text-3xl font-semibold text-leaf-900">Pay by card</h1>
-        <p className="mt-2 text-sm text-ink/65">
-          Order <strong>{pendingStripe.orderNumber}</strong> is reserved. Complete card payment
-          below.
-        </p>
-        <div className="mt-8 rounded-2xl border border-leaf-200 bg-white/90 p-5">
-          <StripeCardForm
-            clientSecret={pendingStripe.clientSecret}
-            paymentId={pendingStripe.paymentId}
-            publishableKey={stripePublishableKey || ''}
-            onPaid={() => {
-              setPaymentNote('Card payment confirmed.');
-              setPlacedOrderId(pendingStripe.orderId);
-              setOrderNumber(pendingStripe.orderNumber);
-              setPendingStripe(null);
-            }}
-            onError={(msg) => setError(msg)}
-          />
-        </div>
-        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
-      </div>
-    );
+  useEffect(() => {
+    if (!isAuth || !addressId || showNewAddress) return;
+    void fetchCart({ addressId })
+      .then((cart) => dispatch(setCartFromApi(cart)))
+      .catch(() => undefined);
+  }, [isAuth, addressId, showNewAddress, dispatch]);
+
+  async function onApplyPromo() {
+    if (!isAuth) {
+      setPromoError('Sign in to apply a promo code');
+      return;
+    }
+    setPromoBusy(true);
+    setPromoError(null);
+    try {
+      const cart = await applyCouponApi(promoCode.trim());
+      dispatch(setCartFromApi(cart));
+      setPromoCode('');
+    } catch (err: unknown) {
+      setPromoError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message || 'Invalid promo code',
+      );
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+
+  async function onRemovePromo() {
+    setPromoBusy(true);
+    try {
+      const cart = await removeCouponApi();
+      dispatch(setCartFromApi(cart));
+    } catch {
+      setPromoError('Could not remove promo');
+    } finally {
+      setPromoBusy(false);
+    }
   }
 
   if (!isAuth && !orderNumber) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="font-display text-3xl font-semibold text-leaf-900">Checkout</h1>
-        <p className="mt-3 text-ink/65">Please sign in to complete your order.</p>
+        <h1 className="font-display text-3xl font-semibold text-heading">Checkout</h1>
+        <p className="mt-3 text-muted">Please sign in to complete your order.</p>
         <Link
           href="/auth/login"
           className="mt-8 inline-flex rounded-full bg-leaf-700 px-6 py-3 text-sm font-semibold text-white hover:bg-leaf-600"
@@ -255,8 +280,9 @@ export default function CheckoutPage() {
   if (items.length === 0 && !orderNumber) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="font-display text-3xl font-semibold text-leaf-900">Checkout</h1>
-        <p className="mt-3 text-ink/65">{tCart('empty')}</p>
+        <CheckoutStepper current="checkout" />
+        <h1 className="font-display text-3xl font-semibold text-heading">Checkout</h1>
+        <p className="mt-3 text-muted">{tCart('empty')}</p>
         <Link
           href="/products"
           className="mt-8 inline-flex rounded-full bg-leaf-700 px-6 py-3 text-sm font-semibold text-white hover:bg-leaf-600"
@@ -268,53 +294,25 @@ export default function CheckoutPage() {
   }
 
   if (orderNumber) {
-    async function downloadPlacedInvoice() {
-      if (!placedOrderId) return;
-      try {
-        const res = await api.get(`/api/orders/${placedOrderId}/invoice`, {
-          responseType: 'blob',
-        });
-        const url = URL.createObjectURL(res.data);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `invoice-${orderNumber}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch {
-        setError('Invoice is not ready yet — open the order page to try again.');
-      }
-    }
-
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="font-display text-3xl font-semibold text-leaf-900">
-          Order placed
-        </h1>
-        <p className="mt-3 text-ink/65">
-          Order <strong>{orderNumber}</strong> received. Your invoice notification has been sent.
+        <CheckoutStepper current="payment" />
+        <h1 className="font-display text-3xl font-semibold text-heading">Order placed</h1>
+        <p className="mt-3 text-muted">
+          Order <strong>{orderNumber}</strong> received.
           {paymentNote ? ` ${paymentNote}` : ''}
         </p>
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          {placedOrderId ? (
-            <button
-              type="button"
-              onClick={() => void downloadPlacedInvoice()}
-              className="inline-flex rounded-full bg-leaf-700 px-6 py-3 text-sm font-semibold text-white hover:bg-leaf-600"
-            >
-              Download invoice
-            </button>
-          ) : null}
           <Link
             href={placedOrderId ? `/account/orders/${placedOrderId}` : '/account/orders'}
-            className="inline-flex rounded-full border border-leaf-300 px-6 py-3 text-sm font-semibold text-leaf-800"
+            className="inline-flex rounded-full bg-leaf-700 px-6 py-3 text-sm font-semibold text-white"
           >
             View order
           </Link>
           {placedOrderId ? (
             <Link
               href={`/account/orders/${placedOrderId}/track`}
-              className="inline-flex rounded-full border border-leaf-300 px-6 py-3 text-sm font-semibold text-leaf-800"
+              className="inline-flex rounded-full border border-line px-6 py-3 text-sm font-semibold text-heading"
             >
               Track delivery
             </Link>
@@ -339,82 +337,87 @@ export default function CheckoutPage() {
     return data.address.id;
   }
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onContinue(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     const fd = new FormData(e.currentTarget);
 
     try {
-      let selectedAddress = addressId;
-      if (showNewAddress || !selectedAddress) {
-        selectedAddress = await createAddressAndCheckout(fd);
+      if (!selectedDay || !selectedSlot) {
+        throw new Error('Select an available delivery date and time slot');
+      }
+      let selectedAddressId = addressId;
+      if (showNewAddress || !selectedAddressId) {
+        selectedAddressId = await createAddressAndCheckout(fd);
       }
       if (!cartId) throw new Error('Cart missing');
       if (quote && !quote.covered) {
         throw new Error(quote.reason || 'Outside delivery zone');
       }
 
-      const requestedWallet = useWallet
-        ? Math.min(walletBalance, Number(walletInput || 0), totals.total)
-        : 0;
-      const requestedPoints = useLoyalty
-        ? Math.min(loyaltyPoints, Math.floor(Number(loyaltyInput || 0)))
-        : 0;
-
-      const method =
-        paymentMethod === 'WALLET' ? 'WALLET' : paymentMethod || 'COD';
+      const { start, end } = slotRange(selectedDay.date, selectedSlot);
+      const method = paymentMethod || 'COD';
 
       const { data } = await api.post<{
-        order: { orderNumber: string; id: string };
+        order: {
+          id: string;
+          orderNumber: string;
+          total: number | string;
+          subtotal: number | string;
+          tax: number | string;
+          shipping: number | string;
+          tipAmount?: number | string;
+          discount: number | string;
+        };
         payment?: { id: string; status: string };
         intent?: { clientSecret?: string; meta?: { stub?: boolean } };
       }>('/api/checkout', {
         cartId,
-        addressId: selectedAddress,
+        addressId: selectedAddressId,
         paymentMethod: method,
-        deliveryType: 'SAME_DAY',
+        deliveryType: 'SCHEDULED',
+        deliverySlotStart: start.toISOString(),
+        deliverySlotEnd: end.toISOString(),
         deliveryNotes: String(fd.get('notes') || '') || null,
-        walletAmount: requestedWallet > 0 ? requestedWallet : null,
-        pointsToRedeem: requestedPoints > 0 ? requestedPoints : null,
+        tipAmount: tipAmount > 0 ? tipAmount : 0,
         couponCode: coupon?.code || null,
       });
 
-      let note =
-        method === 'COD'
-          ? 'Pay cash on delivery.'
-          : method === 'WALLET'
-            ? 'Paid from wallet.'
-            : 'Payment processing…';
+      const orderTotal = Number(data.order.total);
 
       if (method === 'STRIPE' && data.payment?.id) {
         const secret = data.intent?.clientSecret || '';
         const isStub = secret.startsWith('stub_') || Boolean(data.intent?.meta?.stub);
-        if (isStub) {
-          await api.post('/api/payments/confirm', {
-            paymentId: data.payment.id,
-            externalId: `stub_confirmed_${data.order.id}`,
-          });
-          note = 'Card payment confirmed (demo Stripe stub).';
-        } else if (secret) {
-          setPendingStripe({
-            paymentId: data.payment.id,
-            clientSecret: secret,
-            orderId: data.order.id,
-            orderNumber: data.order.orderNumber,
-          });
-          dispatch(clearCart());
-          try {
-            const cart = await fetchCart();
-            dispatch(setCartFromApi(cart));
-          } catch {
-            /* ok */
-          }
-          return;
-        } else {
-          note = 'Card payment intent missing client secret.';
+        savePendingCardPayment({
+          paymentId: data.payment.id,
+          clientSecret: isStub ? `stub_${data.payment.id}` : secret,
+          orderId: data.order.id,
+          orderNumber: data.order.orderNumber,
+          amount: orderTotal,
+          items: items.map((i) => ({
+            name: i.name,
+            quantity: i.quantity,
+            lineTotal: i.unitPrice * i.quantity,
+          })),
+          subtotal: Number(data.order.subtotal),
+          vatAmount: Number(data.order.tax),
+          deliveryFee: Number(data.order.shipping),
+          tipAmount: Number(data.order.tipAmount || tipAmount),
+          discountAmount: Number(data.order.discount || 0),
+        });
+        dispatch(clearCart());
+        try {
+          const cart = await fetchCart();
+          dispatch(setCartFromApi(cart));
+        } catch {
+          /* ok */
         }
-      } else if (data.payment?.id && (method === 'TABBY' || method === 'TAMARA')) {
+        router.push('/checkout/payment');
+        return;
+      }
+
+      if (data.payment?.id && (method === 'TABBY' || method === 'TAMARA')) {
         dispatch(clearCart());
         try {
           const cart = await fetchCart();
@@ -430,7 +433,9 @@ export default function CheckoutPage() {
         });
         router.push(`/checkout/bnpl?${q.toString()}`);
         return;
-      } else if (
+      }
+
+      if (
         data.payment?.id &&
         (method === 'APPLE_PAY' ||
           method === 'GOOGLE_PAY' ||
@@ -440,10 +445,11 @@ export default function CheckoutPage() {
           paymentId: data.payment.id,
           externalId: `${method.toLowerCase()}_confirmed_${data.order.id}`,
         });
-        note = `${method.replaceAll('_', ' ')} payment confirmed (demo stub).`;
+        setPaymentNote(`${method.replaceAll('_', ' ')} payment confirmed.`);
+      } else if (method === 'COD') {
+        setPaymentNote('Pay cash on delivery.');
       }
 
-      setPaymentNote(note);
       setPlacedOrderId(data.order.id);
       setOrderNumber(data.order.orderNumber);
       dispatch(clearCart());
@@ -456,326 +462,445 @@ export default function CheckoutPage() {
       router.refresh();
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })
-          ?.response?.data?.error?.message || 'Checkout failed';
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message ||
+        (err instanceof Error ? err.message : 'Checkout failed');
       setError(msg);
     } finally {
       setLoading(false);
     }
   }
 
+  const deliverToLabel = selectedAddress
+    ? `${user?.firstName || 'Customer'} ${user?.lastName || ''}, ${selectedAddress.line1}, ${selectedAddress.city}`.trim()
+    : 'Select an address';
+
   return (
-    <div className="mx-auto grid max-w-5xl items-start gap-8 px-4 py-10 md:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)] md:gap-10 md:px-6">
-      <div className="min-w-0">
-        <h1 className="font-display text-3xl font-semibold text-leaf-900">
-          Checkout
-        </h1>
-        <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4">
-          {addresses.length > 0 && !showNewAddress && (
-            <fieldset className="space-y-2">
-              <legend className="mb-2 text-sm font-medium">Delivery address</legend>
-              {addresses.map((a) => (
-                <label
-                  key={a.id}
-                  className="flex cursor-pointer gap-3 rounded-xl border border-leaf-200 bg-white/80 p-3 text-sm"
-                >
-                  <input
-                    type="radio"
-                    name="addressId"
-                    checked={addressId === a.id}
-                    onChange={() => setAddressId(a.id)}
-                  />
-                  <span>
-                    <strong>{a.label}</strong>
-                    <br />
-                    {a.line1}, {a.city}, {a.emirate}
-                  </span>
-                </label>
-              ))}
+    <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+      <CheckoutStepper current="checkout" />
+
+      <form
+        onSubmit={(e) => void onContinue(e)}
+        className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.9fr)]"
+      >
+        <div className="space-y-5">
+          {/* Delivery address */}
+          <section className="rounded-2xl border border-line bg-surface p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="font-display text-xl font-semibold text-heading">
+                Delivery Address
+              </h2>
               <button
                 type="button"
-                className="text-sm text-leaf-700 underline"
                 onClick={() => setShowNewAddress(true)}
+                className="text-sm font-semibold text-leaf-700 hover:underline"
               >
-                Add new address
+                + Add New Address
               </button>
-            </fieldset>
-          )}
-
-          {(showNewAddress || addresses.length === 0) && (
-            <>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Label</span>
-                <input
-                  name="label"
-                  defaultValue="Home"
-                  className="w-full rounded-xl border border-leaf-300 bg-white px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Street address</span>
-                <input
-                  name="line1"
-                  required
-                  placeholder="Building, street, area"
-                  className="w-full rounded-xl border border-leaf-300 bg-white px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
-                />
-              </label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium">City</span>
-                  <input
-                    name="city"
-                    required
-                    defaultValue="Dubai"
-                    className="w-full rounded-xl border border-leaf-300 bg-white px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="mb-1.5 block font-medium">Emirate</span>
-                  <select
-                    name="emirate"
-                    value={location.emirate}
-                    onChange={(e) =>
-                      setLocation((l) => ({ ...l, emirate: e.target.value }))
-                    }
-                    className="w-full rounded-xl border border-leaf-300 bg-white px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
-                  >
-                    {EMIRATES.map((e) => (
-                      <option key={e} value={e}>
-                        {e}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <LocationPicker value={location} onChange={setLocation} />
-            </>
-          )}
-
-          {quote ? (
-            <div
-              className={`rounded-xl border px-4 py-3 text-sm ${
-                quote.covered
-                  ? 'border-leaf-200 bg-leaf-50/80 text-leaf-900'
-                  : 'border-red-200 bg-red-50 text-red-700'
-              }`}
-            >
-              {quote.covered ? (
-                <>
-                  Delivery to {quote.zone?.name || 'your area'}:{' '}
-                  <Price
-                    amount={quote.fee}
-                    className="inline-flex items-center gap-0.5 font-semibold"
-                    symbolClassName="inline-block h-3 w-3"
-                  />
-                  {quote.fee === 0 ? ' (free)' : null}
-                  {quote.etaMinutes ? ` · ~${quote.etaMinutes} min` : null}
-                  {quote.zone?.freeAbove ? (
-                    <span className="mt-1 block text-xs text-leaf-700/80">
-                      Free above{' '}
-                      <Price
-                        amount={quote.zone.freeAbove}
-                        className="inline-flex items-center gap-0.5"
-                        symbolClassName="inline-block h-3 w-3"
-                      />
-                    </span>
-                  ) : null}
-                </>
-              ) : (
-                quote.reason || 'We do not deliver to this location yet.'
-              )}
             </div>
-          ) : null}
 
-          <label className="block text-sm">
-            <span className="mb-1.5 block font-medium">Delivery notes</span>
-            <textarea
-              name="notes"
-              rows={2}
-              placeholder="Gate code, leave with security…"
-              className="w-full rounded-xl border border-leaf-300 bg-white px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
-            />
-          </label>
-
-          {walletBalance > 0 && (
-            <fieldset className="rounded-xl border border-leaf-200 bg-white/70 p-4">
-              <legend className="px-1 text-sm font-medium">Wallet</legend>
-              <label className="mt-2 flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={useWallet}
-                  onChange={(e) => setUseWallet(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  Apply wallet balance (
-                  <Price
-                    amount={walletBalance}
-                    className="inline-flex items-center gap-0.5 font-medium"
-                    symbolClassName="inline-block h-3 w-3"
-                  />
-                  )
-                </span>
-              </label>
-              {useWallet && (
-                <label className="mt-3 block text-sm">
-                  <span className="mb-1.5 block font-medium">Amount to apply</span>
+            {addresses.length > 0 && !showNewAddress ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {addresses.map((a) => {
+                  const selected = addressId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setAddressId(a.id)}
+                      className={`rounded-xl border p-4 text-left transition ${
+                        selected
+                          ? 'border-leaf-700 bg-leaf-50 ring-2 ring-leaf-700/20'
+                          : 'border-line bg-surface hover:border-leaf-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-heading">{a.label}</span>
+                        {a.isDefault ? (
+                          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-muted">
+                            Default
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-sm text-muted">
+                        {a.line1}
+                        <br />
+                        {a.city}, {a.emirate}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium">Label</span>
                   <input
-                    type="number"
-                    min={0}
-                    max={Math.min(walletBalance, totals.total)}
-                    step="0.01"
-                    value={walletInput}
-                    onChange={(e) => setWalletInput(e.target.value)}
-                    className="w-full rounded-xl border border-leaf-300 bg-white px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
+                    name="label"
+                    defaultValue="Home"
+                    className="w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
                   />
                 </label>
-              )}
-            </fieldset>
-          )}
-
-          {loyaltyPoints >= pointsPerAed && (
-            <fieldset className="rounded-xl border border-leaf-200 bg-white/70 p-4">
-              <legend className="px-1 text-sm font-medium">Loyalty points</legend>
-              <label className="mt-2 flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={useLoyalty}
-                  onChange={(e) => setUseLoyalty(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  Redeem points ({loyaltyPoints} available · {pointsPerAed} pts = 1 AED)
-                </span>
-              </label>
-              {useLoyalty && (
-                <label className="mt-3 block text-sm">
-                  <span className="mb-1.5 block font-medium">Points to redeem</span>
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium">Street address</span>
                   <input
-                    type="number"
-                    min={0}
-                    max={loyaltyPoints}
-                    step={pointsPerAed}
-                    value={loyaltyInput}
-                    onChange={(e) => setLoyaltyInput(e.target.value)}
-                    className="w-full rounded-xl border border-leaf-300 bg-white px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
+                    name="line1"
+                    required
+                    placeholder="Building, street, area"
+                    className="w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
                   />
-                  <span className="mt-1 block text-xs text-ink/50">
-                    ≈{' '}
-                    <Price
-                      amount={Math.floor(Number(loyaltyInput || 0) / pointsPerAed)}
-                      className="inline-flex items-center gap-0.5"
-                      symbolClassName="inline-block h-3 w-3"
-                    />{' '}
-                    off
-                  </span>
                 </label>
-              )}
-            </fieldset>
-          )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm">
+                    <span className="mb-1.5 block font-medium">City</span>
+                    <input
+                      name="city"
+                      required
+                      defaultValue="Dubai"
+                      className="w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1.5 block font-medium">Emirate</span>
+                    <select
+                      name="emirate"
+                      value={location.emirate}
+                      onChange={(e) =>
+                        setLocation((l) => ({ ...l, emirate: e.target.value }))
+                      }
+                      className="w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
+                    >
+                      {EMIRATES.map((e) => (
+                        <option key={e} value={e}>
+                          {e}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <LocationPicker value={location} onChange={setLocation} />
+                {addresses.length > 0 ? (
+                  <button
+                    type="button"
+                    className="text-sm text-leaf-700 underline"
+                    onClick={() => setShowNewAddress(false)}
+                  >
+                    Use saved address
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </section>
 
-          <fieldset className="rounded-xl border border-leaf-200 bg-white/70 p-4">
-            <legend className="px-1 text-sm font-medium">Payment</legend>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {/* Delivery time */}
+          <section className="rounded-2xl border border-line bg-surface p-5">
+            <h2 className="font-display text-xl font-semibold text-heading">
+              Preferred Delivery Time
+            </h2>
+            <p className="mt-1 text-sm text-muted">Select Date</p>
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {dayOptions.map((d) => {
+                const selected = d.key === dayKey;
+                return (
+                  <button
+                    key={d.key}
+                    type="button"
+                    onClick={() => setDayKey(d.key)}
+                    className={`shrink-0 rounded-xl border px-4 py-3 text-left text-sm transition ${
+                      selected
+                        ? 'border-leaf-700 bg-leaf-50 font-semibold text-leaf-900 ring-2 ring-leaf-700/20'
+                        : 'border-line text-ink hover:border-leaf-400'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="mt-5 text-sm text-muted">Select Time Slot</p>
+            {availableSlots.length === 0 ? (
+              <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                No delivery slots left for today. Please choose another date.
+              </p>
+            ) : (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {availableSlots.map((slot) => {
+                  const selected = slot.id === slotId;
+                  return (
+                    <label
+                      key={slot.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition ${
+                        selected
+                          ? 'border-leaf-700 bg-leaf-50 ring-2 ring-leaf-700/20'
+                          : 'border-line hover:border-leaf-400'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="slot"
+                        className="accent-leaf-700"
+                        checked={selected}
+                        onChange={() => setSlotId(slot.id)}
+                      />
+                      <span className="font-medium text-ink">{slot.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedDay && selectedSlot ? (
+              <p className="mt-4 rounded-xl bg-leaf-50 px-4 py-3 text-sm text-leaf-900">
+                {formatScheduledLabel(selectedDay.date, selectedSlot)}
+              </p>
+            ) : null}
+
+            <label className="mt-4 block text-sm">
+              <span className="mb-1.5 block font-medium text-muted">Delivery notes</span>
+              <textarea
+                name="notes"
+                rows={2}
+                placeholder="Gate code, leave with security…"
+                className="w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
+              />
+            </label>
+          </section>
+
+          {/* Tip */}
+          <section className="rounded-2xl border border-line bg-surface p-5">
+            <h2 className="font-display text-xl font-semibold text-heading">Tip Your Driver</h2>
+            <p className="mt-1 text-sm text-muted">100% of your tip goes to the driver.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {TIP_PRESETS.map((amount) => {
+                const selected = tipPreset === amount;
+                return (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => setTipPreset(amount)}
+                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                      selected
+                        ? 'border-leaf-700 bg-leaf-700 text-white'
+                        : 'border-line text-ink hover:border-leaf-400'
+                    }`}
+                  >
+                    {amount === 0 ? 'No tip' : `AED ${amount}`}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setTipPreset('other')}
+                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  tipPreset === 'other'
+                    ? 'border-leaf-700 bg-leaf-700 text-white'
+                    : 'border-line text-ink hover:border-leaf-400'
+                }`}
+              >
+                Other
+              </button>
+            </div>
+            {tipPreset === 'other' ? (
+              <input
+                type="number"
+                min={0}
+                step="1"
+                value={customTip}
+                onChange={(e) => setCustomTip(e.target.value)}
+                placeholder="Enter tip amount"
+                className="mt-3 w-full max-w-xs rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
+              />
+            ) : null}
+            {tipAmount > 0 ? (
+              <p className="mt-3 rounded-xl bg-leaf-50 px-4 py-3 text-sm text-leaf-900">
+                Thank you! Your driver will receive{' '}
+                <Price
+                  amount={tipAmount}
+                  className="inline-flex items-center gap-0.5 font-semibold"
+                  symbolClassName="inline-block h-3 w-3"
+                />{' '}
+                tip
+              </p>
+            ) : null}
+          </section>
+
+          {/* Payment method */}
+          <section className="rounded-2xl border border-line bg-surface p-5">
+            <h2 className="font-display text-xl font-semibold text-heading">Payment Method</h2>
+            <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-6">
               {methods.map((m) => {
                 const selected = paymentMethod === m.id;
                 const label = paymentMethodShortLabel(m.id, m.label);
                 return (
-                  <label
+                  <button
                     key={m.id}
-                    className={`relative flex min-h-[6.5rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border px-2 py-3 text-center transition ${
+                    type="button"
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={selected}
+                    onClick={() => setPaymentMethod(m.id)}
+                    className={`flex aspect-[3/2] items-center justify-center rounded-xl border px-2 py-2 transition ${
                       selected
-                        ? 'border-leaf-600 bg-leaf-50 ring-2 ring-leaf-600/30'
-                        : 'border-leaf-200 bg-white hover:border-leaf-400'
+                        ? 'border-leaf-700 bg-leaf-50 ring-2 ring-leaf-700/25'
+                        : 'border-line bg-surface hover:border-leaf-400'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="pay"
-                      className="sr-only"
-                      checked={selected}
-                      onChange={() => setPaymentMethod(m.id)}
-                    />
-                    <PaymentMethodIcon id={m.id} className="h-9 w-14 shrink-0" />
-                    <span className="text-xs font-semibold leading-tight text-ink">
-                      {label}
-                      {m.stub ? (
-                        <span className="mt-0.5 block text-[10px] font-normal text-ink/45">
-                          Demo
-                        </span>
-                      ) : (
-                        <span className="mt-0.5 block h-[14px]" aria-hidden />
-                      )}
-                    </span>
-                    {m.id === 'COD' && useWallet && Number(walletInput) > 0 ? (
-                      <span className="text-[10px] text-ink/50">After wallet</span>
-                    ) : null}
-                  </label>
+                    <PaymentMethodIcon id={m.id} className="h-10 w-14 object-contain sm:h-11 sm:w-16" />
+                  </button>
                 );
               })}
             </div>
-          </fieldset>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading || Boolean(quote && !quote.covered)}
-            className="w-full rounded-full bg-leaf-700 py-3 text-sm font-semibold text-white hover:bg-leaf-600 disabled:opacity-60"
-          >
-            {loading ? 'Placing…' : 'Place order'}
-          </button>
-        </form>
-      </div>
+            {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+            {quote && !quote.covered ? (
+              <p className="mt-4 text-sm text-red-600">
+                {quote.reason || 'We do not deliver to this location yet.'}
+              </p>
+            ) : null}
 
-      <aside className="h-fit rounded-2xl border border-leaf-200 bg-white/80 p-5 md:sticky md:top-24">
-        <h2 className="font-display text-xl font-semibold text-leaf-900">
-          Order summary
-        </h2>
-        <ul className="mt-4 space-y-3 text-sm">
-          {items.map((item) => (
-            <li key={item.id || item.productId} className="flex justify-between gap-3">
-              <span className="text-ink/75">
-                {item.name} × {item.quantity}
-              </span>
+            <button
+              type="submit"
+              disabled={
+                loading ||
+                Boolean(quote && !quote.covered) ||
+                !selectedSlot ||
+                availableSlots.length === 0
+              }
+              className="mt-5 w-full rounded-full bg-leaf-700 py-3.5 text-sm font-semibold text-white hover:bg-leaf-600 disabled:opacity-60"
+            >
+              {loading
+                ? 'Processing…'
+                : paymentMethod === 'STRIPE'
+                  ? 'Continue to Payment'
+                  : 'Place order'}
+            </button>
+            <p className="mt-3 text-center text-xs text-muted">
+              Your order will be processed securely. No card details are stored on our servers.
+            </p>
+          </section>
+        </div>
+
+        {/* Order summary */}
+        <aside className="h-fit rounded-2xl border border-line bg-surface p-5 md:sticky md:top-24">
+          <h2 className="font-display text-xl font-semibold text-heading">Order Summary</h2>
+          <p className="mt-2 text-sm text-muted">
+            <span className="font-medium text-ink">Delivering to:</span> {deliverToLabel}
+          </p>
+
+          <ul className="mt-4 space-y-3 border-b border-line pb-4 text-sm">
+            {items.map((item) => (
+              <li key={item.id || item.productId} className="flex justify-between gap-3">
+                <span className="text-muted">
+                  {item.name} × {item.quantity}
+                </span>
+                <Price
+                  amount={item.unitPrice * item.quantity}
+                  className="inline-flex items-center gap-1 font-medium"
+                  symbolClassName="inline-block h-3.5 w-3.5"
+                />
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-4">
+            <p className="text-sm font-medium text-ink">Promo Code</p>
+            {coupon ? (
+              <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+                <span className="font-semibold text-leaf-800">{coupon.code} applied</span>
+                <button
+                  type="button"
+                  disabled={promoBusy}
+                  onClick={() => void onRemovePromo()}
+                  className="text-red-600 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  placeholder="Enter code"
+                  className="min-w-0 flex-1 rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-leaf-500 focus:ring-2 focus:ring-leaf-500/25"
+                />
+                <button
+                  type="button"
+                  disabled={promoBusy || !promoCode.trim()}
+                  onClick={() => void onApplyPromo()}
+                  className="rounded-full bg-leaf-700 px-4 py-2 text-sm font-semibold text-white hover:bg-leaf-600 disabled:opacity-60"
+                >
+                  Apply
+                </button>
+              </div>
+            )}
+            {promoError ? <p className="mt-1 text-xs text-red-600">{promoError}</p> : null}
+          </div>
+
+          <div className="mt-5 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted">Subtotal</span>
               <Price
-                amount={item.unitPrice * item.quantity}
+                amount={totals.subtotal}
+                className="inline-flex items-center gap-1"
+                symbolClassName="inline-block h-3.5 w-3.5"
+              />
+            </div>
+            {totals.discountAmount > 0 ? (
+              <div className="flex justify-between text-leaf-700">
+                <span>Discount</span>
+                <Price
+                  amount={totals.discountAmount}
+                  className="inline-flex items-center gap-1"
+                  symbolClassName="inline-block h-3.5 w-3.5"
+                />
+              </div>
+            ) : null}
+            <div className="flex justify-between rounded-lg bg-citrus-50 px-3 py-2">
+              <span className="text-muted">VAT (5%)</span>
+              <Price
+                amount={displayVat}
+                className="inline-flex items-center gap-1"
+                symbolClassName="inline-block h-3.5 w-3.5"
+              />
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">Delivery Fee{quote?.zone ? ` (${quote.zone.name})` : ''}</span>
+              <Price
+                amount={deliveryFee}
                 className="inline-flex items-center gap-1 font-medium"
                 symbolClassName="inline-block h-3.5 w-3.5"
               />
-            </li>
-          ))}
-        </ul>
-        <div className="mt-5 space-y-2 border-t border-leaf-200 pt-4 text-sm">
-          <div className="flex justify-between">
-            <span className="text-ink/70">{tCart('subtotal')}</span>
-            <Price amount={totals.subtotal} className="inline-flex items-center gap-1" symbolClassName="inline-block h-3.5 w-3.5" />
-          </div>
-          {totals.discountAmount > 0 && (
-            <div className="flex justify-between text-leaf-700">
-              <span>Discount{coupon ? ` (${coupon.code})` : ''}</span>
-              <Price amount={totals.discountAmount} className="inline-flex items-center gap-1" symbolClassName="inline-block h-3.5 w-3.5" />
             </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-ink/70">Delivery</span>
-            <Price amount={totals.deliveryFee} className="inline-flex items-center gap-1" symbolClassName="inline-block h-3.5 w-3.5" />
+            {tipAmount > 0 ? (
+              <div className="flex justify-between">
+                <span className="text-muted">Driver Tip</span>
+                <Price
+                  amount={tipAmount}
+                  className="inline-flex items-center gap-1 font-medium"
+                  symbolClassName="inline-block h-3.5 w-3.5"
+                />
+              </div>
+            ) : null}
+            <div className="flex justify-between border-t border-line pt-3 text-base">
+              <span className="font-semibold text-heading">Total</span>
+              <Price
+                amount={payableTotal}
+                className="inline-flex items-center gap-1.5 text-lg font-semibold text-leaf-800"
+                symbolClassName="inline-block h-4 w-4"
+              />
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-ink/70">VAT (5%)</span>
-            <Price amount={totals.vatAmount} className="inline-flex items-center gap-1" symbolClassName="inline-block h-3.5 w-3.5" />
-          </div>
-          <div className="flex justify-between text-base font-semibold">
-            <span>Total</span>
-            <Price
-              amount={totals.total}
-              className="inline-flex items-center gap-1.5 text-leaf-800"
-              symbolClassName="inline-block h-4 w-4"
-            />
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-ink/50">{tCommon('currencyHint')}</p>
-      </aside>
+
+          <Link
+            href="/cart"
+            className="mt-5 flex w-full items-center justify-center rounded-full border-2 border-leaf-700 px-6 py-3 text-sm font-semibold text-leaf-800 hover:bg-leaf-50"
+          >
+            Back to Basket
+          </Link>
+        </aside>
+      </form>
     </div>
   );
 }

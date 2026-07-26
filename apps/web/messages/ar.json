@@ -70,10 +70,16 @@
   },
   "cart": {
     "title": "سلتك",
+    "subtitle": "راجع منتجاتك ثم تابع لإتمام الشراء.",
     "empty": "سلتك فارغة.",
     "continueShopping": "متابعة التسوق",
     "subtotal": "المجموع الفرعي",
-    "checkout": "إتمام الشراء",
+    "vat": "ضريبة القيمة المضافة (5%)",
+    "orderSummary": "ملخص الطلب",
+    "checkout": "متابعة للدفع",
+    "save": "حفظ",
+    "saveForLater": "حفظ لوقت لاحق",
+    "clearBasket": "إفراغ السلة",
     "remove": "إزالة",
     "quantity": "الكمية"
   },
