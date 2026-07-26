@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { errorHandler, notFound } from './middleware/error';
+import { apiPublicOrigin, rewriteMediaInJson } from './lib/publicUrl';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { uploadRouter } from './routes/upload';
@@ -57,6 +58,14 @@ export function createApp() {
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
+
+  // Rewrite localhost/relative upload URLs to the public API origin (tunnel or API_URL).
+  app.use((req, res, next) => {
+    const origin = apiPublicOrigin(req);
+    const originalJson = res.json.bind(res);
+    res.json = ((body: unknown) => originalJson(rewriteMediaInJson(body, origin))) as typeof res.json;
+    next();
+  });
 
   app.use(
     '/api/auth',

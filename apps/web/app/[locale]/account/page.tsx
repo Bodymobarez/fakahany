@@ -2,23 +2,10 @@
 
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useRouter } from '@/i18n/routing';
+import { openAdminPanel } from '@/lib/adminUrl';
 import { api } from '@/lib/api';
-import { clearTokens, getAccessToken, getRefreshToken } from '@/lib/session';
+import { clearTokens } from '@/lib/session';
 import { logout, selectIsAuthenticated, selectUser } from '@/store/authSlice';
-
-const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3001';
-
-function openAdminPanel() {
-  const token = getAccessToken();
-  const refresh = getRefreshToken();
-  if (!token) {
-    window.open(`${ADMIN_URL}/login`, '_blank', 'noopener,noreferrer');
-    return;
-  }
-  const hash = new URLSearchParams({ token });
-  if (refresh) hash.set('refresh', refresh);
-  window.open(`${ADMIN_URL}/handoff#${hash.toString()}`, '_blank', 'noopener,noreferrer');
-}
 
 const modules = [
   {

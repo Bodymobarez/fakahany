@@ -336,7 +336,7 @@ export default async function HomePage({ params }: Props) {
                 <div className="relative aspect-[16/10] bg-surface-2">
                   {r.imageUrl ? (
                     <Image
-                      src={r.imageUrl}
+                      src={resolveMediaUrl(r.imageUrl)}
                       alt={locale === 'ar' ? r.titleAr : r.titleEn}
                       fill
                       className="object-cover transition duration-500 group-hover:scale-105"

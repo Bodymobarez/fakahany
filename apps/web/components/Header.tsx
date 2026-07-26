@@ -17,7 +17,8 @@ import {
   notificationHref,
   type AppNotification,
 } from '@/lib/notifications';
-import { clearTokens, getAccessToken, getRefreshToken } from '@/lib/session';
+import { openAdminPanel } from '@/lib/adminUrl';
+import { clearTokens } from '@/lib/session';
 import { useTheme } from '@/providers/ThemeProvider';
 import { logout, selectIsAuthenticated, selectUser } from '@/store/authSlice';
 import { selectCartCount } from '@/store/cartSlice';
@@ -31,20 +32,6 @@ import {
   IconProfile,
   IconSun,
 } from '@/components/icons/HeaderIcons';
-
-const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3001';
-
-function openAdminPanel() {
-  const token = getAccessToken();
-  const refresh = getRefreshToken();
-  if (!token) {
-    window.open(`${ADMIN_URL}/login`, '_blank', 'noopener,noreferrer');
-    return;
-  }
-  const hash = new URLSearchParams({ token });
-  if (refresh) hash.set('refresh', refresh);
-  window.open(`${ADMIN_URL}/handoff#${hash.toString()}`, '_blank', 'noopener,noreferrer');
-}
 
 function IconButton({
   label,

@@ -29,6 +29,8 @@
     "NEXTJS_ENV": "production",
     // Avoid dynamic require of middleware-manifest.json on Workers (causes 500 on all routes).
     // OpenNext still runs next-intl middleware via its separate middleware bundle.
-    "NEXT_PRIVATE_MINIMAL_MODE": "1"
+    "NEXT_PRIVATE_MINIMAL_MODE": "1",
+    // Public API (Cloudflare tunnel → local Express + Postgres). Update when the tunnel URL changes.
+    "NEXT_PUBLIC_API_URL": "https://bowling-translated-ronald-dos.trycloudflare.com"
   }
 }
