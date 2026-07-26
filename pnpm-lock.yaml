@@ -23,6 +23,9 @@ importers:
       '@fv/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@opennextjs/cloudflare':
+        specifier: ^1.20.2
+        version: 1.20.2(next@15.5.21(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(wrangler@4.114.0)
       '@reduxjs/toolkit':
         specifier: ^2.5.0
         version: 2.12.0(react-redux@9.3.0(@types/react@19.2.17)(react@19.2.8)(redux@5.0.1))(react@19.2.8)
@@ -78,6 +81,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      wrangler:
+        specifier: ^4.114.0
+        version: 4.114.0
 
   apps/api:
     dependencies:
@@ -1747,7 +1753,7 @@ packages:
 
   '@expo/bunyan@4.0.1':
     resolution: {integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==}
-    engines: {node: '>=0.10.0'}
+    engines: {'0': node >=0.10.0}
 
   '@expo/cli@0.22.28':
     resolution: {integrity: sha512-lvt72KNitGuixYD2l3SZmRKVu2G4zJpmg5V7WfUBNpmUU5oODBw/6qmiJ6kSLAlfDozscUk+BBGknBBzxUrwrA==}

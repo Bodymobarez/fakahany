@@ -165,7 +165,7 @@ export function ProductForm({
   function removeImage(idx: number) {
     setImages((prev) => {
       const next = prev.filter((_, i) => i !== idx).map((img, i) => ({ ...img, sortOrder: i }));
-      if (next.length && !next.some((i) => i.isPrimary)) next[0].isPrimary = true;
+      if (next.length && !next.some((i) => i.isPrimary) && next[0]) next[0].isPrimary = true;
       return next;
     });
   }

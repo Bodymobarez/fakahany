@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nabtio-admin",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-12-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "nabtio-admin"
+    }
+  ],
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "admin.nabtio.adsolutions-eg.com",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "NEXTJS_ENV": "production",
+    "NEXT_PRIVATE_MINIMAL_MODE": "1",
+    "NEXT_PUBLIC_API_URL": "https://bowling-translated-ronald-dos.trycloudflare.com"
+  }
+}

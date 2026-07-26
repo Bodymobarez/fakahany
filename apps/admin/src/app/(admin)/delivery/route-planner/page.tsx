@@ -152,6 +152,7 @@ export default function RoutePlannerPage() {
     if (next < 0 || next >= routeStops.length) return;
     const copy = [...routeStops];
     const [item] = copy.splice(index, 1);
+    if (!item) return;
     copy.splice(next, 0, item);
     setRouteStops(copy);
     setBusy(true);

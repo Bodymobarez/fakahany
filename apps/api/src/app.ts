@@ -39,6 +39,8 @@ export function createApp() {
     'http://localhost:3001',
     'https://nabtio.adsolutions-eg.com',
     'https://nabtio.ceo-691.workers.dev',
+    'https://admin.nabtio.adsolutions-eg.com',
+    'https://nabtio-admin.ceo-691.workers.dev',
   ];
   const fromEnv = (process.env.CORS_ORIGINS || '')
     .split(',')

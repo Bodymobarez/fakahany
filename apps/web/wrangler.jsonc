@@ -31,6 +31,7 @@
     // OpenNext still runs next-intl middleware via its separate middleware bundle.
     "NEXT_PRIVATE_MINIMAL_MODE": "1",
     // Public API (Cloudflare tunnel → local Express + Postgres). Update when the tunnel URL changes.
-    "NEXT_PUBLIC_API_URL": "https://bowling-translated-ronald-dos.trycloudflare.com"
+    "NEXT_PUBLIC_API_URL": "https://bowling-translated-ronald-dos.trycloudflare.com",
+    "NEXT_PUBLIC_ADMIN_URL": "https://admin.nabtio.adsolutions-eg.com"
   }
 }

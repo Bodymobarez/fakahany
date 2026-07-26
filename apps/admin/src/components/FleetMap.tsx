@@ -27,8 +27,9 @@ function FitBounds({ points }: { points: Array<[number, number]> }) {
   const map = useMap();
   useEffect(() => {
     if (points.length === 0) return;
-    if (points.length === 1) {
-      map.setView(points[0], 13);
+    const first = points[0];
+    if (points.length === 1 && first) {
+      map.setView(first, 13);
       return;
     }
     map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 14 });

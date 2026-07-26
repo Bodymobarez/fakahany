@@ -1,0 +1,25 @@
+{
+  "name": "fruits-vegs",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "mobile": "pnpm --filter @fv/mobile start",
+    "mobile:android": "pnpm --filter @fv/mobile android",
+    "mobile:ios": "pnpm --filter @fv/mobile ios",
+    "driver": "pnpm --filter @fv/driver start",
+    "db:start": "powershell -File scripts/db-start.ps1",
+    "db:generate": "pnpm --filter @fv/api prisma:generate",
+    "db:push": "pnpm --filter @fv/api exec prisma db push",
+    "db:migrate": "pnpm --filter @fv/api prisma:migrate",
+    "db:seed": "pnpm --filter @fv/api prisma:seed",
+    "db:studio": "pnpm --filter @fv/api prisma:studio",
+    "deploy:web": "pnpm --filter @fv/web deploy"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

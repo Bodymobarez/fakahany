@@ -49,9 +49,10 @@ export function geoJsonToLatLngs(polygon: unknown): LatLng[] {
 
 export function latLngsToGeoJson(points: LatLng[]) {
   if (points.length < 3) return null;
-  const ring = points.map(([lat, lng]) => [lng, lat]);
+  const ring = points.map(([lat, lng]) => [lng, lat] as [number, number]);
   const first = ring[0];
   const last = ring[ring.length - 1];
+  if (!first || !last) return null;
   if (first[0] !== last[0] || first[1] !== last[1]) ring.push([...first]);
   return { type: 'Polygon', coordinates: [ring] };
 }
