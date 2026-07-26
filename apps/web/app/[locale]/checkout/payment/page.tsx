@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { Price } from '@fv/ui';
 import { Link, useRouter } from '@/i18n/routing';
 import { api } from '@/lib/api';

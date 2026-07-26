@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { Suspense, type FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { Link } from '@/i18n/routing';
@@ -27,7 +27,7 @@ type Ticket = {
 
 type OrderOpt = { id: string; orderNumber: string };
 
-export default function SupportPage() {
+function SupportPageInner() {
   const isAuth = useSelector(selectIsAuthenticated);
   const searchParams = useSearchParams();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -241,5 +241,17 @@ export default function SupportPage() {
         ))}
       </ul>
     </div>
+  );
+}
+
+export default function SupportPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-3xl px-4 py-16 text-center text-ink/60">Loading…</div>
+      }
+    >
+      <SupportPageInner />
+    </Suspense>
   );
 }

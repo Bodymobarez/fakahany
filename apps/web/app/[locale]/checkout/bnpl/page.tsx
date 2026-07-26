@@ -1,11 +1,11 @@
 'use client';
 
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
 import { api } from '@/lib/api';
 
-export default function BnplDemoPage() {
+function BnplDemoInner() {
   const params = useSearchParams();
   const router = useRouter();
   const paymentId = params.get('paymentId') || '';
@@ -104,5 +104,17 @@ export default function BnplDemoPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function BnplDemoPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-lg px-4 py-20 text-center text-ink/60">Loading…</div>
+      }
+    >
+      <BnplDemoInner />
+    </Suspense>
   );
 }

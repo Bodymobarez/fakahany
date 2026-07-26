@@ -147,7 +147,7 @@ export function Header() {
 
   useEffect(() => {
     if (!openPanel) return;
-    function onDoc(e: MouseEvent) {
+    function onDoc(e: globalThis.MouseEvent) {
       if (!panelRef.current?.contains(e.target as Node)) setOpenPanel(null);
     }
     document.addEventListener('mousedown', onDoc);

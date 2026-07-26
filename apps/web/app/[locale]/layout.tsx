@@ -31,6 +31,13 @@ export const metadata: Metadata = {
   },
   description: 'Farm-fresh fruits and vegetables delivered across the UAE.',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '16x16', type: 'image/x-icon' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/favicon.svg' }],
+  },
   appleWebApp: {
     capable: true,
     title: 'Fresh Harvest',

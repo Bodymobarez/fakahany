@@ -136,8 +136,9 @@ export default function CheckoutPage() {
       if (slotId) setSlotId('');
       return;
     }
-    if (!availableSlots.some((s) => s.id === slotId)) {
-      setSlotId(availableSlots[0].id);
+    const first = availableSlots[0];
+    if (first && !availableSlots.some((s) => s.id === slotId)) {
+      setSlotId(first.id);
     }
   }, [availableSlots, slotId]);
 

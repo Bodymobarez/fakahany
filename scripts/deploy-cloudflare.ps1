@@ -14,6 +14,9 @@ npm exec -- pnpm install
 
 Write-Host "Deploying apps/web to Cloudflare (domain: nabtio.adsolutions-eg.com)..." -ForegroundColor Cyan
 Set-Location (Join-Path $root 'apps\web')
-npm exec -- pnpm run deploy
+# Windows without Developer Mode can't create Next.js standalone symlinks.
+$env:NODE_OPTIONS = "--require `"$root\scripts\symlink-fallback.cjs`""
+npm exec -- pnpm exec opennextjs-cloudflare build
+npm exec -- pnpm exec opennextjs-cloudflare deploy
 
 Write-Host "Done. Verify https://nabtio.adsolutions-eg.com" -ForegroundColor Green

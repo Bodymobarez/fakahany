@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useSearchParams } from 'next/navigation';
 import { Price } from '@fv/ui';
@@ -51,7 +51,7 @@ function Chevron({ open, className }: { open: boolean; className?: string }) {
   );
 }
 
-export default function OrdersPage() {
+function OrdersPageInner() {
   const isAuth = useSelector(selectIsAuthenticated);
   const dispatch = useDispatch();
   const router = useRouter();
@@ -328,5 +328,17 @@ export default function OrdersPage() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-6xl px-4 py-16 text-center text-ink/60">Loading…</div>
+      }
+    >
+      <OrdersPageInner />
+    </Suspense>
   );
 }

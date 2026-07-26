@@ -7,3 +7,4 @@ out
 .dev.vars
 *.log
 .wrangler
+symlink-fallback.cjs

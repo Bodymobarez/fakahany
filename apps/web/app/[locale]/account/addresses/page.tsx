@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from '@/i18n/routing';
 import { api } from '@/lib/api';
