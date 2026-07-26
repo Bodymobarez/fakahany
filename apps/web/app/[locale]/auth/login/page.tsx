@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
-import { useTranslations } from 'next-intl';
+import { Suspense, useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useDispatch } from 'react-redux';
 import { Link, useRouter } from '@/i18n/routing';
 import {
@@ -10,6 +11,7 @@ import {
   loginWithPassword,
   parseApiError,
   requestOtp,
+  startOAuthRedirect,
   verifyOtp,
   type OAuthProvider,
 } from '@/lib/authApi';
@@ -20,8 +22,21 @@ import { SocialLoginButtons } from '@/components/auth/SocialLoginButtons';
 
 type Mode = 'mobile' | 'password';
 
-export default function LoginPage() {
+function oauthErrorMessage(code: string | null) {
+  if (!code) return null;
+  const decoded = decodeURIComponent(code);
+  if (decoded.endsWith('_not_configured')) {
+    const provider = decoded.replace(/_not_configured$/, '');
+    return `${provider[0]!.toUpperCase()}${provider.slice(1)} sign-in is not configured yet. Ask your admin to set the OAuth app credentials on the API.`;
+  }
+  if (decoded === 'access_denied') return 'Sign-in was cancelled.';
+  return decoded.replace(/_/g, ' ');
+}
+
+function LoginPageInner() {
   const t = useTranslations('auth');
+  const locale = useLocale();
+  const search = useSearchParams();
   const dispatch = useDispatch();
   const router = useRouter();
 
@@ -39,6 +54,11 @@ export default function LoginPage() {
   const [needs2fa, setNeeds2fa] = useState(false);
   const [totp, setTotp] = useState('');
   const [oauthProvider, setOauthProvider] = useState<OAuthProvider | null>(null);
+
+  useEffect(() => {
+    const msg = oauthErrorMessage(search.get('oauthError'));
+    if (msg) setError(msg);
+  }, [search]);
 
   async function complete(data: {
     user: Parameters<typeof finishAuthSession>[1]['user'];
@@ -130,28 +150,12 @@ export default function LoginPage() {
     }
   }
 
-  async function onSocial(provider: OAuthProvider) {
+  function onSocial(provider: OAuthProvider) {
     setError(null);
     setLoading(true);
     setOauthProvider(provider);
-    try {
-      const data = await loginWithOAuth(provider);
-      if (data.requires2fa) {
-        setNeeds2fa(true);
-        setMode('password');
-        return;
-      }
-      if (!data.user || !data.accessToken || !data.refreshToken) throw new Error('Login incomplete');
-      await complete({
-        user: data.user,
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
-    } catch (err) {
-      setError(parseApiError(err, `Could not sign in with ${provider}`));
-    } finally {
-      setLoading(false);
-    }
+    // Full redirect to Google / Apple / Facebook via the API.
+    startOAuthRedirect(provider, { locale });
   }
 
   return (
@@ -286,5 +290,13 @@ export default function LoginPage() {
         onSelect={(p) => void onSocial(p)}
       />
     </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-lg px-4 py-20 text-center text-ink/60">Loading…</div>}>
+      <LoginPageInner />
+    </Suspense>
   );
 }

@@ -33,10 +33,17 @@ import { adminRouter } from './routes/admin';
 export function createApp() {
   const app = express();
 
-  const origins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:3001')
+  const defaultOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://nabtio.adsolutions-eg.com',
+    'https://nabtio.ceo-691.workers.dev',
+  ];
+  const fromEnv = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const origins = [...new Set([...defaultOrigins, ...fromEnv])];
 
   app.set('trust proxy', 1);
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));

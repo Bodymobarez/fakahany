@@ -66,7 +66,9 @@
     "registerCta": "إنشاء حساب",
     "noAccount": "جديد هنا؟",
     "hasAccount": "لديك حساب؟",
-    "forgot": "نسيت كلمة المرور؟"
+    "forgot": "نسيت كلمة المرور؟",
+    "completeProfileTitle": "أضف عنوان التوصيل",
+    "completeProfileSub": "احفظ تفاصيل التوصيل في حسابك."
   },
   "cart": {
     "title": "سلتك",

@@ -5,7 +5,17 @@ import { verifyAccessToken } from '../lib/jwt';
 let io: Server | null = null;
 
 export function initSockets(httpServer: HttpServer): Server {
-  const origins = (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').map((s) => s.trim());
+  const defaultOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://nabtio.adsolutions-eg.com',
+    'https://nabtio.ceo-691.workers.dev',
+  ];
+  const fromEnv = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const origins = [...new Set([...defaultOrigins, ...fromEnv])];
 
   io = new Server(httpServer, {
     cors: { origin: origins, credentials: true },

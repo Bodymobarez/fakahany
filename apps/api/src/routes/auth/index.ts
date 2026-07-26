@@ -10,7 +10,7 @@ import { twoFaRouter } from './twofa';
  * Auth API surface (mounted at /api/auth):
  * POST /register
  * POST /login | /refresh | /logout | GET /me
- * POST /oauth
+ * GET  /oauth/:provider | GET|POST /oauth/:provider/callback | POST /oauth/exchange | POST /oauth
  * POST /otp/request | /otp/verify
  * POST /password/forgot | /password/reset
  * POST /2fa/setup | /2fa/verify | /2fa/disable

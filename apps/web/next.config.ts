@@ -6,6 +6,9 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const nextConfig: NextConfig = {
   transpilePackages: ['@fv/ui', '@fv/shared'],
   images: {
+    // OpenNext on Cloudflare often returns 404 for `/_next/image`; use passthrough loader.
+    loader: 'custom',
+    loaderFile: './lib/imageLoader.ts',
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'example.com' },

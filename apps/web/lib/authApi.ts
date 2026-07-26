@@ -68,17 +68,53 @@ export async function verifyOtp(phone: string, code: string) {
   return data;
 }
 
+/** Browser redirect into Google / Apple / Facebook authorize URL (via API). */
+export function startOAuthRedirect(
+  provider: OAuthProvider,
+  options?: { locale?: string; returnTo?: string },
+) {
+  const base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000').replace(/\/$/, '');
+  const url = new URL(`${base}/api/auth/oauth/${provider}`);
+  url.searchParams.set('locale', options?.locale === 'ar' ? 'ar' : 'en');
+  if (options?.returnTo) url.searchParams.set('returnTo', options.returnTo);
+  window.location.assign(url.toString());
+}
+
+export async function exchangeOAuthTicket(ticket: string) {
+  const { data } = await api.post<
+    AuthTokens & { isNew?: boolean; needsAddress?: boolean; provider?: string }
+  >('/api/auth/oauth/exchange', { ticket });
+  return data;
+}
+
+/** Legacy stub / 2FA continuation for non-redirect clients. */
 export async function loginWithOAuth(
   provider: OAuthProvider,
   options?: { totp?: string },
 ) {
   const { data } = await api.post<
-    AuthTokens & { requires2fa?: boolean; user?: ApiUser; accessToken?: string; refreshToken?: string }
+    AuthTokens & {
+      requires2fa?: boolean;
+      user?: ApiUser;
+      accessToken?: string;
+      refreshToken?: string;
+      needsAddress?: boolean;
+      isNew?: boolean;
+    }
   >('/api/auth/oauth', {
     provider,
     deviceId: getSessionId() || `web_${Date.now()}`,
     totp: options?.totp,
   });
+  return data;
+}
+
+export async function updateMyProfile(input: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+}) {
+  const { data } = await api.patch<{ user: ApiUser }>('/api/auth/me', input);
   return data;
 }
 

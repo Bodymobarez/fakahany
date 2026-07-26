@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { verifyPassword } from '../../lib/password';
 import { verifyRefreshToken } from '../../lib/jwt';
@@ -93,6 +93,37 @@ sessionRouter.get('/me', authenticate, async (req, res, next) => {
         twoFactorEnabled: Boolean(user.twoFactorSecret),
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const profilePatchSchema = z.object({
+  firstName: z.string().min(1).max(80).optional(),
+  lastName: z.string().min(1).max(80).optional(),
+  phone: z.string().min(7).max(20).optional(),
+});
+
+sessionRouter.patch('/me', authenticate, validate(profilePatchSchema), async (req, res, next) => {
+  try {
+    const body = req.body as z.infer<typeof profilePatchSchema>;
+    if (body.phone) {
+      const taken = await prisma.user.findFirst({
+        where: { phone: body.phone, NOT: { id: req.user!.sub } },
+      });
+      if (taken) throw new AppError(409, 'Phone already registered', 'PHONE_TAKEN');
+    }
+    const user = await prisma.user.update({
+      where: { id: req.user!.sub },
+      data: {
+        ...(body.firstName ? { firstName: body.firstName } : {}),
+        ...(body.lastName ? { lastName: body.lastName } : {}),
+        ...(body.phone
+          ? { phone: body.phone, phoneVerified: false }
+          : {}),
+      },
+    });
+    res.json({ user: publicUser(user) });
   } catch (err) {
     next(err);
   }
