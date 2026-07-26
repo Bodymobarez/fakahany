@@ -46,6 +46,13 @@ export function PromoBanners({
               </a>
             );
           }
+          if (href.startsWith('#')) {
+            return (
+              <a key={b.id} href={href}>
+                {inner}
+              </a>
+            );
+          }
           return (
             <Link key={b.id} href={href}>
               {inner}

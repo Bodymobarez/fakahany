@@ -717,30 +717,43 @@ async function main() {
     });
   }
 
+  const homeBanners = [
+    {
+      titleEn: 'Flash sale',
+      titleAr: 'تخفيضات سريعة',
+      imageUrl:
+        'https://images.unsplash.com/photo-1601004890684-d8cbf643f5f2?auto=format&fit=crop&w=1400&q=80',
+      linkUrl: '/products?tag=flash',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      titleEn: 'New arrivals',
+      titleAr: 'وصل حديثاً',
+      imageUrl:
+        'https://images.unsplash.com/photo-1619566636858-adf3ef4644b9?auto=format&fit=crop&w=1400&q=80',
+      linkUrl: '/products?tag=new',
+      sortOrder: 1,
+      isActive: true,
+    },
+  ];
   const bannerCount = await prisma.banner.count();
   if (bannerCount === 0) {
-    await prisma.banner.createMany({
-      data: [
-        {
-          titleEn: 'Weekend citrus haul',
-          titleAr: 'عرض الحمضيات',
-          imageUrl:
-            'https://images.unsplash.com/photo-1557800636-894a64c1696f?auto=format&fit=crop&w=1200&q=80',
-          linkUrl: '/products?category=fruits',
-          sortOrder: 0,
-          isActive: true,
-        },
-        {
-          titleEn: 'Farm greens, same-day Dubai',
-          titleAr: 'خضار طازجة في دبي',
-          imageUrl:
-            'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=1200&q=80',
-          linkUrl: '/products?category=vegetables',
-          sortOrder: 1,
-          isActive: true,
-        },
-      ],
+    await prisma.banner.createMany({ data: homeBanners });
+  } else {
+    const legacy = await prisma.banner.count({
+      where: {
+        titleEn: { in: ['Weekend citrus haul', 'Farm greens, same-day Dubai'] },
+      },
     });
+    if (legacy > 0) {
+      await prisma.banner.deleteMany({
+        where: {
+          titleEn: { in: ['Weekend citrus haul', 'Farm greens, same-day Dubai'] },
+        },
+      });
+      await prisma.banner.createMany({ data: homeBanners });
+    }
   }
 
   await prisma.giftCard.upsert({

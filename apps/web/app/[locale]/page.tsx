@@ -3,7 +3,6 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/routing';
 import { Section } from '@/components/Section';
 import { ProductGrid } from '@/components/ProductGrid';
-import { FlashCountdown } from '@/components/FlashCountdown';
 import {
   fetchFeaturedProducts,
   fetchProducts,
@@ -57,11 +56,7 @@ export default async function HomePage({ params }: Props) {
 
   const bestSellers = productsForSection(all, 'best-seller');
   const offers = productsForSection(all, 'offer');
-  let flash = productsForSection(all, 'flash');
-  let flashEndsAt: string | null = null;
-  const newcomers = productsForSection(all, 'new');
   const organic = productsForSection(all, 'organic');
-  const imported = productsForSection(all, 'imported');
   const seasonalFruits = productsForSection(all, 'seasonal');
   const seasonalVeg = productsForSection(all, 'veg');
 
@@ -74,31 +69,12 @@ export default async function HomePage({ params }: Props) {
   };
   let recipes: HomeRecipe[] = [];
   try {
-    const [{ data: flashData }, { data: recipeData }] = await Promise.all([
-      api.get<{
-        sales: Array<{
-          endsAt?: string;
-          items: Array<{
-            salePrice: number | string;
-            product: CatalogProduct;
-          }>;
-        }>;
-      }>('/api/content/flash-sales'),
-      api.get<{ recipes: HomeRecipe[] }>('/api/content/recipes'),
-    ]);
-    const activeSale = (flashData.sales || [])[0];
-    if (activeSale?.endsAt) flashEndsAt = activeSale.endsAt;
-    const fromSales = (flashData.sales || []).flatMap((sale) =>
-      (sale.items || []).map((item) => ({
-        ...item.product,
-        basePrice: item.salePrice,
-        compareAtPrice: item.product.basePrice ?? item.product.compareAtPrice,
-      })),
+    const { data: recipeData } = await api.get<{ recipes: HomeRecipe[] }>(
+      '/api/content/recipes',
     );
-    if (fromSales.length) flash = fromSales;
     recipes = recipeData.recipes || [];
   } catch {
-    /* keep tag-based flash / empty recipes */
+    /* optional */
   }
 
   let recommended: CatalogProduct[] = featured.length ? featured : all;
@@ -111,13 +87,24 @@ export default async function HomePage({ params }: Props) {
     /* keep featured fallback */
   }
 
-  let promoBanners: PromoBanner[] = [];
-  try {
-    const { data: bannerData } = await api.get<{ banners: PromoBanner[] }>('/api/content/banners');
-    promoBanners = bannerData.banners || [];
-  } catch {
-    /* optional */
-  }
+  const promoBanners: PromoBanner[] = [
+    {
+      id: 'flash-sale',
+      titleEn: t('flashSale'),
+      titleAr: t('flashSale'),
+      imageUrl:
+        'https://images.unsplash.com/photo-1601004890684-d8cbf643f5f2?auto=format&fit=crop&w=1400&q=80',
+      linkUrl: '/products?tag=flash',
+    },
+    {
+      id: 'new-arrivals',
+      titleEn: t('newArrivals'),
+      titleAr: t('newArrivals'),
+      imageUrl:
+        'https://images.unsplash.com/photo-1619566636858-adf3ef4644b9?auto=format&fit=crop&w=1400&q=80',
+      linkUrl: '/products?tag=new',
+    },
+  ];
 
   let homeReviews: Array<{
     rating: number;
@@ -200,6 +187,28 @@ export default async function HomePage({ params }: Props) {
       <PromoBanners banners={promoBanners} locale={locale} />
 
       <Section
+        title={t('bestSellers')}
+        viewAllHref="/products"
+        viewAllLabel={t('viewAll')}
+      >
+        <ProductGrid
+          products={bestSellers.slice(0, 4)}
+          emptyLabel={t('emptySection')}
+        />
+      </Section>
+
+      <Section
+        title={t('todaysOffers')}
+        viewAllHref="/products"
+        viewAllLabel={t('viewAll')}
+      >
+        <ProductGrid
+          products={offers.slice(0, 4)}
+          emptyLabel={t('emptySection')}
+        />
+      </Section>
+
+      <Section
         title={t('featured')}
         viewAllHref="/products"
         viewAllLabel={t('viewAll')}
@@ -244,69 +253,12 @@ export default async function HomePage({ params }: Props) {
       </section>
 
       <Section
-        title={t('bestSellers')}
-        viewAllHref="/products"
-        viewAllLabel={t('viewAll')}
-      >
-        <ProductGrid
-          products={bestSellers.slice(0, 4)}
-          emptyLabel={t('emptySection')}
-        />
-      </Section>
-
-      <Section
-        title={t('todaysOffers')}
-        viewAllHref="/products"
-        viewAllLabel={t('viewAll')}
-      >
-        <ProductGrid
-          products={offers.slice(0, 4)}
-          emptyLabel={t('emptySection')}
-        />
-      </Section>
-
-      <section className="bg-leaf-800 py-12 text-white">
-        <div className="mx-auto max-w-6xl px-4 md:px-6">
-          <h2 className="mb-2 font-display text-2xl font-semibold tracking-tight text-citrus-400 md:text-3xl">
-            {t('flashSale')}
-          </h2>
-          {flashEndsAt ? <FlashCountdown endsAt={flashEndsAt} /> : <div className="mb-6" />}
-          <ProductGrid
-            products={flash.slice(0, 4)}
-            emptyLabel={t('emptySection')}
-          />
-        </div>
-      </section>
-
-      <Section
-        title={t('newArrivals')}
-        viewAllHref="/products"
-        viewAllLabel={t('viewAll')}
-      >
-        <ProductGrid
-          products={newcomers.slice(0, 4)}
-          emptyLabel={t('emptySection')}
-        />
-      </Section>
-
-      <Section
         title={t('organic')}
         viewAllHref="/products?category=organic"
         viewAllLabel={t('viewAll')}
       >
         <ProductGrid
           products={organic.slice(0, 4)}
-          emptyLabel={t('emptySection')}
-        />
-      </Section>
-
-      <Section
-        title={t('imported')}
-        viewAllHref="/products"
-        viewAllLabel={t('viewAll')}
-      >
-        <ProductGrid
-          products={imported.slice(0, 4)}
           emptyLabel={t('emptySection')}
         />
       </Section>
