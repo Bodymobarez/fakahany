@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet map stacking inside Next/Tailwind layouts */
+.leaflet-container {
+  z-index: 0;
+  font: inherit;
+}
+
+:root {
+  /* Brand greens — stable in both themes (buttons / accents) */
+  --color-leaf-50: #f3faf4;
+  --color-leaf-100: #e4f5e7;
+  --color-leaf-200: #c5e8cc;
+  --color-leaf-300: #97d3a4;
+  --color-leaf-400: #5bb572;
+  --color-leaf-500: #369653;
+  --color-leaf-600: #267a41;
+  --color-leaf-700: #1f7a3a;
+  --color-leaf-800: #1a5c30;
+  --color-leaf-900: #164d29;
+
+  --color-citrus-400: #ffd56a;
+  --color-citrus-500: #ffc454;
+  --color-citrus-600: #e8a820;
+
+  /* Semantic surfaces & type */
+  --color-mist: #f6fbf7;
+  --color-ink: #142019;
+  --color-muted: #5c6f64;
+  --color-heading: #164d29;
+  --color-surface: #ffffff;
+  --color-surface-2: #f3faf4;
+  --color-border: #d5e8da;
+  --header-ink: #142019;
+  --header-bg: #ffffff;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--color-ink);
+  background:
+    radial-gradient(ellipse 90% 55% at 10% -10%, rgba(151, 211, 164, 0.28), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(255, 196, 84, 0.14), transparent 50%),
+    var(--color-mist);
+  min-height: 100vh;
+}
+
+html.dark {
+  --color-leaf-50: #102018;
+  --color-leaf-100: #163024;
+  --color-leaf-200: #2a4a38;
+  --color-leaf-300: #3d6b52;
+  --color-leaf-600: #267a41;
+  --color-leaf-700: #2f8f4d;
+  /* Keep 800/900 as solid brand greens for icons on light chips */
+  --color-leaf-800: #1a5c30;
+  --color-leaf-900: #164d29;
+
+  --color-mist: #0b1210;
+  --color-ink: #e8f0ea;
+  --color-muted: #9aaf9f;
+  --color-heading: #d4f0dc;
+  --color-surface: #15231c;
+  --color-surface-2: #102018;
+  --color-border: #2a4a38;
+  --header-ink: #e8f0ea;
+  --header-bg: #0a0f0c;
+}
+
+html.dark body {
+  background:
+    radial-gradient(ellipse 90% 55% at 10% -10%, rgba(31, 122, 58, 0.18), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(255, 196, 84, 0.06), transparent 50%),
+    var(--color-mist);
+  color: var(--color-ink);
+}
+
+.site-header {
+  background-color: var(--header-bg) !important;
+  color: var(--header-ink);
+  border-color: var(--color-border);
+}
+
+/* Map common utility surfaces onto semantic tokens in dark mode */
+html.dark .bg-white,
+html.dark .bg-white\/90,
+html.dark .bg-white\/80,
+html.dark .bg-white\/70,
+html.dark .bg-white\/60 {
+  background-color: var(--color-surface) !important;
+}
+
+html.dark .bg-leaf-50 {
+  background-color: var(--color-surface-2) !important;
+}
+
+html.dark input:not([type='checkbox']):not([type='radio']),
+html.dark select,
+html.dark textarea {
+  background-color: #101a14 !important;
+  color: var(--color-ink) !important;
+  border-color: var(--color-border) !important;
+}
+
+html.dark option {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+}
+
+html.dark .text-red-600 {
+  color: #f87171 !important;
+}
+
+html.dark .text-red-700 {
+  color: #fca5a5 !important;
+}
+
+/* Readable headings on dark surfaces when components still use leaf-900 */
+html.dark .text-leaf-900,
+html.dark .text-leaf-800 {
+  color: var(--color-heading) !important;
+}
+
+::selection {
+  background: var(--color-leaf-200);
+  color: var(--color-heading);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes soft-pan {
+  from {
+    transform: scale(1.05) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.12) translate3d(-1.5%, 1%, 0);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-rise-delay {
+  animation: rise-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.animate-rise-delay-2 {
+  animation: rise-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
+}
+
+.hero-media {
+  animation: soft-pan 18s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-rise-delay,
+  .animate-rise-delay-2,
+  .hero-media {
+    animation: none;
+  }
+}

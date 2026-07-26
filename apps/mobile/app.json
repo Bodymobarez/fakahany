@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Fresh Harvest",
+    "slug": "fv-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "fv-mobile",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ae.freshharvest.customer",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Fresh Harvest uses your location to suggest delivery addresses.",
+        "NSFaceIDUsageDescription": "Unlock your Fresh Harvest account with Face ID.",
+        "NSCameraUsageDescription": "Attach photos to support tickets when needed."
+      }
+    },
+    "android": {
+      "package": "ae.freshharvest.customer",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f766e"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-local-authentication",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Fresh Harvest to use your location for delivery."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "API_URL": "http://localhost:4000",
+      "eas": {
+        "projectId": "fv-mobile-local"
+      }
+    }
+  }
+}

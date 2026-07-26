@@ -1,0 +1,18 @@
+{
+  "name": "Fresh Harvest",
+  "short_name": "Fresh Harvest",
+  "description": "Fresh fruits and vegetables delivered across the UAE",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3faf4",
+  "theme_color": "#1f7a3a",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/dirham.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

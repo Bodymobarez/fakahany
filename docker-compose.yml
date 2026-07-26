@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fv-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: fv
+      POSTGRES_PASSWORD: fv_local
+      POSTGRES_DB: fruits_vegs
+    volumes:
+      - fv_pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: fv-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - fv_redis_data:/data
+
+volumes:
+  fv_pg_data:
+  fv_redis_data:
