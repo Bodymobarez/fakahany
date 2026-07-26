@@ -11,11 +11,11 @@ import {
 } from '@/lib/catalog';
 import { SAMPLE_CATEGORIES, SAMPLE_PRODUCTS } from '@/lib/sample-products';
 import type { CatalogProduct } from '@/lib/api';
-import { api } from '@/lib/api';
+import { api, resolveMediaUrl } from '@/lib/api';
 import { PromoBanners, type PromoBanner } from '@/components/PromoBanners';
 
 const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=1600&q=80';
+  'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=1600&q=80';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -47,7 +47,7 @@ export default async function HomePage({ params }: Props) {
         nameEn: c.nameEn,
         nameAr: c.nameAr,
         slug: c.slug,
-        image: c.imageUrl || HERO_IMAGE,
+        image: resolveMediaUrl(c.imageUrl || HERO_IMAGE),
       }));
     }
   } catch {
@@ -101,7 +101,7 @@ export default async function HomePage({ params }: Props) {
       titleEn: t('newArrivals'),
       titleAr: t('newArrivals'),
       imageUrl:
-        'https://images.unsplash.com/photo-1619566636858-adf3ef4644b9?auto=format&fit=crop&w=1400&q=80',
+        'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=1400&q=80',
       linkUrl: '/products?tag=new',
     },
   ];

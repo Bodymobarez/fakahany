@@ -88,21 +88,43 @@ export function productDisplayName(
   return product.nameEn || product.nameAr || product.name || product.slug;
 }
 
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=800&q=80';
+
+/** Rewrite local/dev media URLs so production can load them from the public API. */
+export function resolveMediaUrl(raw?: string | null): string {
+  if (!raw) return FALLBACK_IMAGE;
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+
+  // Placeholder / broken demo hosts
+  if (/example\.com/i.test(raw) || /\/cat\.jpg/i.test(raw)) return FALLBACK_IMAGE;
+
+  if (raw.startsWith('/uploads/')) return `${baseURL}${raw}`;
+
+  try {
+    const url = new URL(raw, baseURL);
+    if (
+      url.hostname === 'localhost' ||
+      url.hostname === '127.0.0.1' ||
+      url.hostname.endsWith('.local')
+    ) {
+      if (url.pathname.startsWith('/uploads/')) {
+        return `${baseURL}${url.pathname}${url.search}`;
+      }
+      return FALLBACK_IMAGE;
+    }
+    return url.toString();
+  } catch {
+    return FALLBACK_IMAGE;
+  }
+}
+
 export function productImage(product: CatalogProduct): string {
   const raw =
     product.imageUrl ||
     (product.images?.find((i) => i.isPrimary) ?? product.images?.[0])?.url ||
     '';
-  if (!raw) {
-    return 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=600&q=80';
-  }
-  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) {
-    return raw;
-  }
-  if (raw.startsWith('/uploads/')) {
-    return `${baseURL}${raw}`;
-  }
-  return raw;
+  return resolveMediaUrl(raw);
 }
 
 export function productPrice(product: CatalogProduct): number {

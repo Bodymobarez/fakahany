@@ -731,7 +731,7 @@ async function main() {
       titleEn: 'New arrivals',
       titleAr: 'وصل حديثاً',
       imageUrl:
-        'https://images.unsplash.com/photo-1619566636858-adf3ef4644b9?auto=format&fit=crop&w=1400&q=80',
+        'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=1400&q=80',
       linkUrl: '/products?tag=new',
       sortOrder: 1,
       isActive: true,

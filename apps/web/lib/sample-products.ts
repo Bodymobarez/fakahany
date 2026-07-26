@@ -1,5 +1,8 @@
 import type { CatalogProduct } from './api';
 
+const img = (id: string, w = 600) =>
+  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
+
 export const SAMPLE_PRODUCTS: CatalogProduct[] = [
   {
     id: 'sample-1',
@@ -8,8 +11,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameAr: 'أفوكادو هاس عضوي',
     price: 12.5,
     compareAtPrice: 15,
-    imageUrl:
-      'https://images.unsplash.com/photo-1523049673857-eb24f48b9c2d?w=600&q=80',
+    imageUrl: img('photo-1622206151226-18ca2c9ab4a1'),
     inStock: true,
     isFeatured: true,
     tags: ['organic', 'best-seller'],
@@ -21,8 +23,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameAr: 'فراولة حلوة',
     price: 18,
     compareAtPrice: 24,
-    imageUrl:
-      'https://images.unsplash.com/photo-1464965911861-746a04b4b188?w=600&q=80',
+    imageUrl: img('photo-1601004890684-d8cbf643f5f2'),
     inStock: true,
     isFeatured: true,
     tags: ['flash', 'seasonal'],
@@ -33,8 +34,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameEn: 'Baby Spinach',
     nameAr: 'سبانخ صغيرة',
     price: 8.75,
-    imageUrl:
-      'https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=600&q=80',
+    imageUrl: img('photo-1576045057995-568f588f82fb'),
     inStock: true,
     tags: ['organic', 'veg'],
   },
@@ -44,8 +44,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameEn: 'Alphonso Mango',
     nameAr: 'مانجو ألفونسو',
     price: 22,
-    imageUrl:
-      'https://images.unsplash.com/photo-1553279768-bb40cc8b7c9a?w=600&q=80',
+    imageUrl: img('photo-1600271886742-f049cd451bba'),
     inStock: true,
     tags: ['imported', 'seasonal'],
   },
@@ -56,8 +55,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameAr: 'طماطم كرزية',
     price: 9.5,
     compareAtPrice: 12,
-    imageUrl:
-      'https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=600&q=80',
+    imageUrl: img('photo-1592924357228-91a4daadcfea'),
     inStock: true,
     tags: ['offer', 'best-seller'],
   },
@@ -67,8 +65,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameEn: 'Granny Smith Apples',
     nameAr: 'تفاح غراني سميث',
     price: 14,
-    imageUrl:
-      'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=600&q=80',
+    imageUrl: img('photo-1560806887-1e4cd0b6cbd6'),
     inStock: true,
     tags: ['new', 'fruit'],
   },
@@ -78,8 +75,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameEn: 'Lebanese Cucumber',
     nameAr: 'خيار لبناني',
     price: 6.25,
-    imageUrl:
-      'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=600&q=80',
+    imageUrl: img('photo-1449300079323-02e209d9d3a6'),
     inStock: true,
     tags: ['veg', 'seasonal'],
   },
@@ -90,8 +86,7 @@ export const SAMPLE_PRODUCTS: CatalogProduct[] = [
     nameAr: 'توت أزرق طازج',
     price: 28,
     compareAtPrice: 34,
-    imageUrl:
-      'https://images.unsplash.com/photo-1498557850523-fd3d118b962e?w=600&q=80',
+    imageUrl: img('photo-1498557850523-fd3d118b962e'),
     inStock: true,
     tags: ['imported', 'flash'],
   },
@@ -102,29 +97,25 @@ export const SAMPLE_CATEGORIES = [
     slug: 'fruits',
     nameEn: 'Fruits',
     nameAr: 'فواكه',
-    image:
-      'https://images.unsplash.com/photo-1619566636858-adf3ef4644b9?w=400&q=80',
+    image: img('photo-1610832958506-aa56368176cf', 400),
   },
   {
     slug: 'vegetables',
     nameEn: 'Vegetables',
     nameAr: 'خضروات',
-    image:
-      'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&q=80',
+    image: img('photo-1540420773420-3366772f4999', 400),
   },
   {
     slug: 'organic',
     nameEn: 'Organic',
     nameAr: 'عضوي',
-    image:
-      'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=400&q=80',
+    image: img('photo-1488459716781-31db52582fe9', 400),
   },
   {
     slug: 'herbs',
     nameEn: 'Herbs',
     nameAr: 'أعشاب',
-    image:
-      'https://images.unsplash.com/photo-1466692476866-aef1dfb1e735?w=400&q=80',
+    image: img('photo-1563565375-f3fdfdbefa83', 400),
   },
 ];
 
