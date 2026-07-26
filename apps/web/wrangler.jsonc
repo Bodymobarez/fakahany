@@ -26,6 +26,9 @@
     }
   ],
   "vars": {
-    "NEXTJS_ENV": "production"
+    "NEXTJS_ENV": "production",
+    // Avoid dynamic require of middleware-manifest.json on Workers (causes 500 on all routes).
+    // OpenNext still runs next-intl middleware via its separate middleware bundle.
+    "NEXT_PRIVATE_MINIMAL_MODE": "1"
   }
 }
