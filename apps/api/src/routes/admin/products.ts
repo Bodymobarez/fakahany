@@ -2,8 +2,23 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ProductType, SoldAs } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { cleanProductDescription } from '../../lib/cleanDescription';
 import { validate } from '../../middleware/validate';
 import { AppError } from '../../middleware/error';
+
+function withCleanDescriptions<T extends { descriptionEn?: string; descriptionAr?: string }>(
+  data: T,
+): T {
+  return {
+    ...data,
+    ...(data.descriptionEn !== undefined
+      ? { descriptionEn: cleanProductDescription(data.descriptionEn) }
+      : {}),
+    ...(data.descriptionAr !== undefined
+      ? { descriptionAr: cleanProductDescription(data.descriptionAr) }
+      : {}),
+  };
+}
 
 export const productsAdminRouter = Router();
 
@@ -107,7 +122,13 @@ productsAdminRouter.get('/:id', async (req, res, next) => {
       include: { images: true, brand: true, variants: true, categories: true },
     });
     if (!product) throw new AppError(404, 'Product not found', 'NOT_FOUND');
-    res.json({ product });
+    res.json({
+      product: {
+        ...product,
+        descriptionEn: cleanProductDescription(product.descriptionEn),
+        descriptionAr: cleanProductDescription(product.descriptionAr),
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -115,7 +136,7 @@ productsAdminRouter.get('/:id', async (req, res, next) => {
 
 productsAdminRouter.post('/', validate(productSchema), async (req, res, next) => {
   try {
-    const body = req.body as z.infer<typeof productSchema>;
+    const body = withCleanDescriptions(req.body as z.infer<typeof productSchema>);
     const { categoryIds, images, ...data } = body;
     const product = await prisma.product.create({
       data: {
@@ -135,7 +156,7 @@ productsAdminRouter.post('/', validate(productSchema), async (req, res, next) =>
 
 productsAdminRouter.patch('/:id', validate(productSchema.partial()), async (req, res, next) => {
   try {
-    const body = req.body as Partial<z.infer<typeof productSchema>>;
+    const body = withCleanDescriptions(req.body as Partial<z.infer<typeof productSchema>>);
     const { categoryIds, images, ...data } = body;
     const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new AppError(404, 'Product not found', 'NOT_FOUND');

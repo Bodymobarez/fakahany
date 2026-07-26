@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { cleanProductDescription } from '@/lib/cleanDescription';
 import { PageHeader } from '@/components/PageHeader';
 import { ProductForm, type ProductFormValues } from '@/components/ProductForm';
 import { ProductVariantsEditor } from '@/components/ProductVariantsEditor';
@@ -52,8 +53,8 @@ export default function EditProductPage() {
             (c: { categoryId?: string; category?: { id: string } }) =>
               c.categoryId || c.category?.id,
           ).filter(Boolean),
-          descriptionEn: p.descriptionEn || '',
-          descriptionAr: p.descriptionAr || '',
+          descriptionEn: cleanProductDescription(p.descriptionEn),
+          descriptionAr: cleanProductDescription(p.descriptionAr),
           isActive: p.isActive,
           isFeatured: Boolean(p.isFeatured),
           isBestSeller: Boolean(p.isBestSeller),

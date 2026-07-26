@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, getAuthToken } from '@/lib/api';
+import { cleanProductDescription } from '@/lib/cleanDescription';
 
 export type ProductImageInput = {
   url: string;
@@ -188,6 +189,8 @@ export function ProductForm({
     setError(null);
     const payload = {
       ...form,
+      descriptionEn: cleanProductDescription(form.descriptionEn),
+      descriptionAr: cleanProductDescription(form.descriptionAr),
       basePrice: Number(form.basePrice),
       compareAtPrice:
         form.compareAtPrice === '' || form.compareAtPrice == null

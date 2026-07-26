@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { cleanProductDescription } from '../lib/cleanDescription';
 import { AppError } from '../middleware/error';
 import { validate } from '../middleware/validate';
 
@@ -186,7 +187,14 @@ catalogRouter.get('/products/:slug', async (req, res, next) => {
       });
     }
 
-    res.json({ product: { ...product, relatedProducts } });
+    res.json({
+      product: {
+        ...product,
+        descriptionEn: cleanProductDescription(product.descriptionEn),
+        descriptionAr: cleanProductDescription(product.descriptionAr),
+        relatedProducts,
+      },
+    });
   } catch (err) {
     next(err);
   }
